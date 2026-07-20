@@ -42,6 +42,7 @@ const typeIcon: Record<string, string> = {
   up: '🟢',
   degraded: '🟡',
   ssl_expiring: '🔒',
+  lighthouse_regression: '📉',
 }
 
 function formatRelative(iso: string) {

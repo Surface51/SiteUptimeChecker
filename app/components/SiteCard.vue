@@ -23,6 +23,14 @@ const responseLabel = computed(() => {
   return t == null ? '—' : `${Math.round(t)} ms`
 })
 
+const performanceColor = computed(() => {
+  const p = props.site.latestPerformance
+  if (p === null) return 'bg-slate-800/60 text-slate-500'
+  if (p >= 90) return 'bg-emerald-900/40 text-emerald-300'
+  if (p >= 50) return 'bg-amber-900/40 text-amber-300'
+  return 'bg-rose-900/40 text-rose-300'
+})
+
 const screenshotSrc = computed(() => {
   if (!props.site.screenshotUpdatedAt) return null
   return `/screenshots/${props.site.id}.png?v=${encodeURIComponent(props.site.screenshotUpdatedAt)}`
@@ -88,7 +96,17 @@ async function togglePaused() {
           </span>
           <StatusBadge v-else :status="site.latestCheck?.status ?? null" />
         </div>
-        <p class="mt-0.5 truncate text-xs text-slate-500">{{ hostname }}</p>
+        <div class="mt-0.5 flex items-center justify-between gap-2">
+          <p class="truncate text-xs text-slate-500">{{ hostname }}</p>
+          <span
+            v-if="site.latestPerformance !== null"
+            class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
+            :class="performanceColor"
+            title="Lighthouse Performance (mobile)"
+          >
+            LH {{ site.latestPerformance }}
+          </span>
+        </div>
         <div v-if="site.inMaintenance" class="mt-1.5 inline-flex items-center rounded-full bg-sky-900/40 px-2 py-0.5 text-[11px] font-medium text-sky-300">
           Maintenance
         </div>

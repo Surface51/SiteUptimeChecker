@@ -4,7 +4,7 @@ import type { CheckStatus, SiteSummary } from '#shared/types'
 const props = defineProps<{ sites: SiteSummary[] }>()
 const emit = defineEmits<{ removed: [], checked: [] }>()
 
-type SortKey = 'name' | 'status' | 'uptime24h' | 'uptime7d' | 'response' | 'sslDays' | 'lastChecked'
+type SortKey = 'name' | 'status' | 'uptime24h' | 'uptime7d' | 'response' | 'sslDays' | 'lastChecked' | 'performance'
 
 const sortKey = ref<SortKey>('status')
 const sortDir = ref<'asc' | 'desc'>('asc')
@@ -76,6 +76,8 @@ const sortedSites = computed(() => {
         return compareNullable(a.latestCheck?.sslDaysRemaining ?? null, b.latestCheck?.sslDaysRemaining ?? null, dir)
       case 'lastChecked':
         return compareNullable(timeOf(a.latestCheck?.checkedAt), timeOf(b.latestCheck?.checkedAt), dir)
+      case 'performance':
+        return compareNullable(a.latestPerformance, b.latestPerformance, dir)
       default:
         return 0
     }
@@ -90,6 +92,7 @@ const columns: { key: SortKey; label: string; align?: 'right' }[] = [
   { key: 'uptime24h', label: 'Uptime 24h', align: 'right' },
   { key: 'uptime7d', label: 'Uptime 7d', align: 'right' },
   { key: 'response', label: 'Response', align: 'right' },
+  { key: 'performance', label: 'Performance', align: 'right' },
   { key: 'sslDays', label: 'SSL days', align: 'right' },
   { key: 'lastChecked', label: 'Last checked', align: 'right' },
 ]
@@ -100,6 +103,13 @@ function formatPct(v: number | null) {
 function formatMs(v: number | null | undefined) {
   return v == null ? '—' : `${Math.round(v)} ms`
 }
+function performanceColor(p: number | null) {
+  if (p === null) return 'bg-slate-800/60 text-slate-500'
+  if (p >= 90) return 'bg-emerald-900/40 text-emerald-300'
+  if (p >= 50) return 'bg-amber-900/40 text-amber-300'
+  return 'bg-rose-900/40 text-rose-300'
+}
+
 function formatRelative(iso: string | undefined | null) {
   const t = timeOf(iso)
   if (t === null) return '—'
@@ -164,6 +174,16 @@ async function checkNow(site: SiteSummary) {
           <td class="px-4 py-2.5 text-right text-slate-300">{{ formatPct(site.uptime24h) }}</td>
           <td class="px-4 py-2.5 text-right text-slate-300">{{ formatPct(site.uptime7d) }}</td>
           <td class="px-4 py-2.5 text-right text-slate-300">{{ formatMs(site.latestCheck?.timeTotal) }}</td>
+          <td class="px-4 py-2.5 text-right">
+            <span
+              v-if="site.latestPerformance !== null"
+              class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+              :class="performanceColor(site.latestPerformance)"
+            >
+              {{ site.latestPerformance }}
+            </span>
+            <span v-else class="text-slate-500">—</span>
+          </td>
           <td
             class="px-4 py-2.5 text-right"
             :class="(site.latestCheck?.sslDaysRemaining ?? 999) < 14 ? 'text-amber-300' : 'text-slate-300'"

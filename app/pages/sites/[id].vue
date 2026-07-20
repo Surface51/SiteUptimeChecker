@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DailyUptime, HistoryPoint, IncidentRow, SiteSummary } from '#shared/types'
+import type { DailyUptime, HistoryPoint, IncidentRow, LighthouseFormFactor, LighthouseReport, SiteSummary } from '#shared/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -35,6 +35,13 @@ const { data: history, refresh: refreshHistory } = await useFetch<HistoryPoint[]
 
 const recentTicks = computed(() => (history.value ?? []).slice(-50))
 
+const lhFormFactor = ref<LighthouseFormFactor>('mobile')
+
+const { data: lighthouseHistory, refresh: refreshLighthouse } = await useFetch<LighthouseReport[]>(
+  () => `/api/sites/${id.value}/lighthouse`,
+  { query: computed(() => ({ formFactor: lhFormFactor.value, days: 30 })), default: () => [] },
+)
+
 const avgResponseMs = computed(() => {
   const values = (history.value ?? []).map((p) => p.timeTotal).filter((v): v is number => v !== null)
   if (!values.length) return null
@@ -57,6 +64,7 @@ onMounted(() => {
     refreshSite()
     refreshHistory()
     refreshIncidents()
+    refreshLighthouse()
   }, 30_000)
 })
 onUnmounted(() => {
@@ -373,6 +381,20 @@ async function removeSite() {
         </div>
       </div>
       <HistoryChart :points="history ?? []" />
+    </div>
+
+    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+      <h2 class="mb-3 text-sm font-medium text-slate-200">Lighthouse performance</h2>
+      <LighthouseReport
+        :site-id="id"
+        :form-factor="lhFormFactor"
+        :history="lighthouseHistory ?? []"
+        @update:form-factor="lhFormFactor = $event"
+        @ran="refreshLighthouse"
+      />
+      <div class="mt-4">
+        <LighthouseChart :points="lighthouseHistory ?? []" />
+      </div>
     </div>
 
     <IncidentList :incidents="incidents ?? []" />

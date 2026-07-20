@@ -13,6 +13,8 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "better-sqlite3": "^12.11.1",
+    "chrome-launcher": "^1.2.1",
+    "lighthouse": "^13.4.0",
     "nuxt": "^4.4.8",
     "playwright": "^1.61.1",
     "tailwindcss": "^4.3.3",

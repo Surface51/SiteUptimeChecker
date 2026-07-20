@@ -7,6 +7,8 @@ import type {
   DailyUptime,
   DnsRecords,
   IncidentRow,
+  LighthouseFormFactor,
+  LighthouseReport,
   MaintenanceWindowRow,
   NotificationRow,
   NotificationType,
@@ -113,6 +115,27 @@ export function getDb(): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_maintenance_site ON maintenance_windows(site_id, ends_at DESC);
+
+    CREATE TABLE IF NOT EXISTS lighthouse_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      measured_at TEXT NOT NULL DEFAULT (datetime('now')),
+      form_factor TEXT NOT NULL,
+      performance REAL,
+      accessibility REAL,
+      best_practices REAL,
+      seo REAL,
+      fcp REAL,
+      lcp REAL,
+      tbt REAL,
+      cls REAL,
+      speed_index REAL,
+      tti REAL,
+      lighthouse_version TEXT,
+      error TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_lh_site_time ON lighthouse_reports(site_id, form_factor, measured_at DESC);
   `)
 
   migrate(db)
@@ -494,6 +517,7 @@ export function buildSiteSummary(site: Site): SiteSummary {
     statusTicks: getStatusTicks(site.id),
     openIncident: getOpenIncident(site.id),
     inMaintenance: isInMaintenance(site.id),
+    latestPerformance: getLatestLighthouseReport(site.id, 'mobile')?.performance ?? null,
   }
 }
 
@@ -602,6 +626,127 @@ export function isInMaintenance(siteId: number, at?: string): boolean {
     )
     .get(siteId, at ?? new Date().toISOString(), at ?? new Date().toISOString()) as { n: number }
   return row.n > 0
+}
+
+// ---------- lighthouse reports ----------
+
+interface LighthouseDbRow {
+  id: number
+  site_id: number
+  measured_at: string
+  form_factor: string
+  performance: number | null
+  accessibility: number | null
+  best_practices: number | null
+  seo: number | null
+  fcp: number | null
+  lcp: number | null
+  tbt: number | null
+  cls: number | null
+  speed_index: number | null
+  tti: number | null
+  lighthouse_version: string | null
+  error: string | null
+}
+
+function mapLighthouseReport(row: LighthouseDbRow): LighthouseReport {
+  return {
+    id: row.id,
+    siteId: row.site_id,
+    measuredAt: row.measured_at,
+    formFactor: row.form_factor as LighthouseFormFactor,
+    performance: row.performance,
+    accessibility: row.accessibility,
+    bestPractices: row.best_practices,
+    seo: row.seo,
+    fcp: row.fcp,
+    lcp: row.lcp,
+    tbt: row.tbt,
+    cls: row.cls,
+    speedIndex: row.speed_index,
+    tti: row.tti,
+    lighthouseVersion: row.lighthouse_version,
+    error: row.error,
+  }
+}
+
+export interface InsertLighthouseReportInput {
+  siteId: number
+  formFactor: LighthouseFormFactor
+  performance: number | null
+  accessibility: number | null
+  bestPractices: number | null
+  seo: number | null
+  fcp: number | null
+  lcp: number | null
+  tbt: number | null
+  cls: number | null
+  speedIndex: number | null
+  tti: number | null
+  lighthouseVersion: string | null
+  error: string | null
+}
+
+export function insertLighthouseReport(input: InsertLighthouseReportInput): LighthouseReport {
+  const result = getDb()
+    .prepare(
+      `INSERT INTO lighthouse_reports (
+        site_id, form_factor, performance, accessibility, best_practices, seo,
+        fcp, lcp, tbt, cls, speed_index, tti, lighthouse_version, error
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      input.siteId,
+      input.formFactor,
+      input.performance,
+      input.accessibility,
+      input.bestPractices,
+      input.seo,
+      input.fcp,
+      input.lcp,
+      input.tbt,
+      input.cls,
+      input.speedIndex,
+      input.tti,
+      input.lighthouseVersion,
+      input.error,
+    )
+
+  getDb()
+    .prepare(`DELETE FROM lighthouse_reports WHERE site_id = ? AND measured_at < datetime('now', '-180 days')`)
+    .run(input.siteId)
+
+  const row = getDb()
+    .prepare('SELECT * FROM lighthouse_reports WHERE id = ?')
+    .get(result.lastInsertRowid) as LighthouseDbRow
+  return mapLighthouseReport(row)
+}
+
+export function getLatestLighthouseReport(siteId: number, formFactor: LighthouseFormFactor): LighthouseReport | null {
+  const row = getDb()
+    .prepare(
+      `SELECT * FROM lighthouse_reports
+       WHERE site_id = ? AND form_factor = ? AND error IS NULL
+       ORDER BY measured_at DESC LIMIT 1`,
+    )
+    .get(siteId, formFactor) as LighthouseDbRow | undefined
+  return row ? mapLighthouseReport(row) : null
+}
+
+export function getLighthouseHistory(
+  siteId: number,
+  formFactor: LighthouseFormFactor,
+  days: number,
+  limit: number,
+): LighthouseReport[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM lighthouse_reports
+       WHERE site_id = ? AND form_factor = ? AND measured_at >= datetime('now', ?)
+       ORDER BY measured_at ASC LIMIT ?`,
+    )
+    .all(siteId, formFactor, `-${days} days`, limit) as LighthouseDbRow[]
+  return rows.map(mapLighthouseReport)
 }
 
 // ---------- notifications ----------

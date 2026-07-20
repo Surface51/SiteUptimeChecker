@@ -77,6 +77,7 @@ export interface SiteSummary extends Site {
   statusTicks: StatusTick[]
   openIncident: IncidentRow | null
   inMaintenance: boolean
+  latestPerformance: number | null
 }
 
 export interface HistoryPoint {
@@ -110,7 +111,28 @@ export interface DailyUptime {
   total: number
 }
 
-export type NotificationType = 'down' | 'up' | 'degraded' | 'ssl_expiring'
+export type NotificationType = 'down' | 'up' | 'degraded' | 'ssl_expiring' | 'lighthouse_regression'
+
+export type LighthouseFormFactor = 'mobile' | 'desktop'
+
+export interface LighthouseReport {
+  id: number
+  siteId: number
+  measuredAt: string
+  formFactor: LighthouseFormFactor
+  performance: number | null
+  accessibility: number | null
+  bestPractices: number | null
+  seo: number | null
+  fcp: number | null
+  lcp: number | null
+  tbt: number | null
+  cls: number | null
+  speedIndex: number | null
+  tti: number | null
+  lighthouseVersion: string | null
+  error: string | null
+}
 
 export interface NotificationRow {
   id: number
