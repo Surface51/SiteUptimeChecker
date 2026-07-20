@@ -51,6 +51,17 @@ async function checkNow() {
     checking.value = false
   }
 }
+
+const toggling = ref(false)
+async function togglePaused() {
+  toggling.value = true
+  try {
+    await $fetch(`/api/sites/${props.site.id}`, { method: 'PATCH', body: { enabled: !props.site.enabled } })
+    emit('checked')
+  } finally {
+    toggling.value = false
+  }
+}
 </script>
 
 <template>
@@ -71,9 +82,16 @@ async function checkNow() {
       <div class="p-4">
         <div class="flex items-center justify-between gap-2">
           <h3 class="truncate font-medium text-slate-100">{{ site.name || hostname }}</h3>
-          <StatusBadge :status="site.latestCheck?.status ?? null" />
+          <span v-if="!site.enabled" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500">
+            <span class="h-2 w-2 rounded-full bg-slate-600" />
+            Paused
+          </span>
+          <StatusBadge v-else :status="site.latestCheck?.status ?? null" />
         </div>
         <p class="mt-0.5 truncate text-xs text-slate-500">{{ hostname }}</p>
+        <div v-if="site.inMaintenance" class="mt-1.5 inline-flex items-center rounded-full bg-sky-900/40 px-2 py-0.5 text-[11px] font-medium text-sky-300">
+          Maintenance
+        </div>
 
         <div class="mt-3 flex items-center justify-between text-sm">
           <div>
@@ -95,6 +113,8 @@ async function checkNow() {
             SSL expires in {{ site.latestCheck.sslDaysRemaining }}d
           </span>
         </div>
+
+        <UptimeBar class="mt-3" :ticks="site.statusTicks" />
       </div>
     </NuxtLink>
 
@@ -106,6 +126,14 @@ async function checkNow() {
         @click.stop.prevent="checkNow"
       >
         {{ checking ? 'Checking…' : 'Check now' }}
+      </button>
+      <button
+        type="button"
+        :disabled="toggling"
+        class="rounded-md bg-slate-950/70 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+        @click.stop.prevent="togglePaused"
+      >
+        {{ site.enabled ? 'Pause' : 'Resume' }}
       </button>
       <button
         type="button"

@@ -4,13 +4,17 @@ import Database from 'better-sqlite3'
 import type {
   CheckRow,
   CheckStatus,
+  DailyUptime,
   DnsRecords,
+  IncidentRow,
+  MaintenanceWindowRow,
   NotificationRow,
   NotificationType,
   RedirectHop,
   SecurityHeadersReport,
   Site,
   SiteSummary,
+  StatusTick,
 } from '#shared/types'
 
 const DATA_DIR = join(process.cwd(), '.data')
@@ -89,9 +93,45 @@ export function getDb(): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS incidents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      started_at TEXT NOT NULL DEFAULT (datetime('now')),
+      ended_at TEXT,
+      cause TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_incidents_site ON incidents(site_id, started_at DESC);
+
+    CREATE TABLE IF NOT EXISTS maintenance_windows (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      starts_at TEXT NOT NULL,
+      ends_at TEXT NOT NULL,
+      reason TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_maintenance_site ON maintenance_windows(site_id, ends_at DESC);
   `)
 
+  migrate(db)
+
   return db
+}
+
+function hasColumn(db: Database.Database, table: string, column: string): boolean {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+  return cols.some((c) => c.name === column)
+}
+
+function migrate(db: Database.Database) {
+  if (!hasColumn(db, 'sites', 'degraded_ms')) {
+    db.exec(`ALTER TABLE sites ADD COLUMN degraded_ms INTEGER NOT NULL DEFAULT 5000`)
+  }
+  if (!hasColumn(db, 'sites', 'expected_status')) {
+    db.exec(`ALTER TABLE sites ADD COLUMN expected_status INTEGER`)
+  }
 }
 
 export function closeDb() {
@@ -111,6 +151,8 @@ interface SiteRow {
   enabled: number
   created_at: string
   screenshot_updated_at: string | null
+  degraded_ms: number
+  expected_status: number | null
 }
 
 function mapSite(row: SiteRow): Site {
@@ -122,6 +164,8 @@ function mapSite(row: SiteRow): Site {
     enabled: !!row.enabled,
     createdAt: row.created_at,
     screenshotUpdatedAt: row.screenshot_updated_at,
+    degradedMs: row.degraded_ms,
+    expectedStatus: row.expected_status,
   }
 }
 
@@ -198,31 +242,52 @@ export function getSiteByUrl(url: string): Site | null {
   return row ? mapSite(row) : null
 }
 
-export function insertSite(input: { url: string; name: string | null; checkIntervalSeconds: number }): Site {
+export function insertSite(input: {
+  url: string
+  name: string | null
+  checkIntervalSeconds: number
+  degradedMs?: number
+  expectedStatus?: number | null
+}): Site {
   const result = getDb()
     .prepare(
-      'INSERT INTO sites (url, name, check_interval_seconds) VALUES (?, ?, ?)',
+      'INSERT INTO sites (url, name, check_interval_seconds, degraded_ms, expected_status) VALUES (?, ?, ?, ?, ?)',
     )
-    .run(input.url, input.name, input.checkIntervalSeconds)
+    .run(
+      input.url,
+      input.name,
+      input.checkIntervalSeconds,
+      input.degradedMs ?? 5000,
+      input.expectedStatus ?? null,
+    )
   return getSite(result.lastInsertRowid as number)!
 }
 
 export function updateSite(
   id: number,
-  patch: Partial<{ url: string; name: string | null; checkIntervalSeconds: number; enabled: boolean }>,
+  patch: Partial<{
+    url: string
+    name: string | null
+    checkIntervalSeconds: number
+    enabled: boolean
+    degradedMs: number
+    expectedStatus: number | null
+  }>,
 ): Site | null {
   const current = getSite(id)
   if (!current) return null
 
   getDb()
     .prepare(
-      `UPDATE sites SET url = ?, name = ?, check_interval_seconds = ?, enabled = ? WHERE id = ?`,
+      `UPDATE sites SET url = ?, name = ?, check_interval_seconds = ?, enabled = ?, degraded_ms = ?, expected_status = ? WHERE id = ?`,
     )
     .run(
       patch.url ?? current.url,
       patch.name === undefined ? current.name : patch.name,
       patch.checkIntervalSeconds ?? current.checkIntervalSeconds,
       (patch.enabled ?? current.enabled) ? 1 : 0,
+      patch.degradedMs ?? current.degradedMs,
+      patch.expectedStatus === undefined ? current.expectedStatus : patch.expectedStatus,
       id,
     )
   return getSite(id)
@@ -357,6 +422,68 @@ export function getHistory(siteId: number, hours: number, limit: number) {
   }))
 }
 
+export function getStatusTicks(siteId: number, limit = 40): StatusTick[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT checked_at, status FROM checks WHERE site_id = ?
+       ORDER BY checked_at DESC LIMIT ?`,
+    )
+    .all(siteId, limit) as { checked_at: string; status: string }[]
+  return rows.reverse().map((r) => ({ checkedAt: r.checked_at, status: r.status as CheckStatus }))
+}
+
+export interface CheckLogFilter {
+  limit: number
+  offset: number
+  status?: CheckStatus
+}
+
+export function getCheckLog(siteId: number, filter: CheckLogFilter): CheckRow[] {
+  const rows = filter.status
+    ? (getDb()
+        .prepare(
+          `SELECT * FROM checks WHERE site_id = ? AND status = ?
+           ORDER BY checked_at DESC LIMIT ? OFFSET ?`,
+        )
+        .all(siteId, filter.status, filter.limit, filter.offset) as CheckDbRow[])
+    : (getDb()
+        .prepare(
+          `SELECT * FROM checks WHERE site_id = ?
+           ORDER BY checked_at DESC LIMIT ? OFFSET ?`,
+        )
+        .all(siteId, filter.limit, filter.offset) as CheckDbRow[])
+  return rows.map(mapCheck)
+}
+
+export function getDailyUptime(siteId: number, days = 30): DailyUptime[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT date(checked_at) AS day,
+              COUNT(*) AS total,
+              SUM(CASE WHEN status != 'down' THEN 1 ELSE 0 END) AS up
+       FROM checks
+       WHERE site_id = ? AND checked_at >= date('now', ?)
+       GROUP BY day
+       ORDER BY day ASC`,
+    )
+    .all(siteId, `-${days} days`) as { day: string; total: number; up: number }[]
+
+  const byDay = new Map(rows.map((r) => [r.day, r]))
+  const result: DailyUptime[] = []
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date()
+    d.setUTCDate(d.getUTCDate() - i)
+    const key = d.toISOString().slice(0, 10)
+    const row = byDay.get(key)
+    result.push({
+      date: key,
+      total: row?.total ?? 0,
+      uptime: row && row.total > 0 ? (100 * row.up) / row.total : null,
+    })
+  }
+  return result
+}
+
 export function buildSiteSummary(site: Site): SiteSummary {
   return {
     ...site,
@@ -364,7 +491,117 @@ export function buildSiteSummary(site: Site): SiteSummary {
     uptime24h: getUptime(site.id, 24),
     uptime7d: getUptime(site.id, 24 * 7),
     sparkline: getSparkline(site.id),
+    statusTicks: getStatusTicks(site.id),
+    openIncident: getOpenIncident(site.id),
+    inMaintenance: isInMaintenance(site.id),
   }
+}
+
+// ---------- incidents ----------
+
+interface IncidentDbRow {
+  id: number
+  site_id: number
+  started_at: string
+  ended_at: string | null
+  cause: string | null
+}
+
+function mapIncident(row: IncidentDbRow): IncidentRow {
+  let durationSeconds: number | null = null
+  const start = new Date(`${row.started_at.replace(' ', 'T')}Z`).getTime()
+  const end = row.ended_at ? new Date(`${row.ended_at.replace(' ', 'T')}Z`).getTime() : Date.now()
+  durationSeconds = Math.max(0, Math.round((end - start) / 1000))
+
+  return {
+    id: row.id,
+    siteId: row.site_id,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    cause: row.cause,
+    durationSeconds,
+  }
+}
+
+export function getOpenIncident(siteId: number): IncidentRow | null {
+  const row = getDb()
+    .prepare('SELECT * FROM incidents WHERE site_id = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1')
+    .get(siteId) as IncidentDbRow | undefined
+  return row ? mapIncident(row) : null
+}
+
+export function openIncident(siteId: number, cause: string | null) {
+  if (getOpenIncident(siteId)) return
+  getDb().prepare('INSERT INTO incidents (site_id, cause) VALUES (?, ?)').run(siteId, cause)
+}
+
+export function closeOpenIncident(siteId: number) {
+  getDb()
+    .prepare(`UPDATE incidents SET ended_at = datetime('now') WHERE site_id = ? AND ended_at IS NULL`)
+    .run(siteId)
+}
+
+export function listIncidents(siteId: number, limit = 50): IncidentRow[] {
+  const rows = getDb()
+    .prepare('SELECT * FROM incidents WHERE site_id = ? ORDER BY started_at DESC LIMIT ?')
+    .all(siteId, limit) as IncidentDbRow[]
+  return rows.map(mapIncident)
+}
+
+// ---------- maintenance windows ----------
+
+interface MaintenanceDbRow {
+  id: number
+  site_id: number
+  starts_at: string
+  ends_at: string
+  reason: string | null
+}
+
+function mapMaintenance(row: MaintenanceDbRow): MaintenanceWindowRow {
+  return {
+    id: row.id,
+    siteId: row.site_id,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    reason: row.reason,
+  }
+}
+
+export function listMaintenanceWindows(siteId: number): MaintenanceWindowRow[] {
+  const rows = getDb()
+    .prepare('SELECT * FROM maintenance_windows WHERE site_id = ? ORDER BY starts_at DESC')
+    .all(siteId) as MaintenanceDbRow[]
+  return rows.map(mapMaintenance)
+}
+
+export function insertMaintenanceWindow(input: {
+  siteId: number
+  startsAt: string
+  endsAt: string
+  reason: string | null
+}): MaintenanceWindowRow {
+  const result = getDb()
+    .prepare('INSERT INTO maintenance_windows (site_id, starts_at, ends_at, reason) VALUES (?, ?, ?, ?)')
+    .run(input.siteId, input.startsAt, input.endsAt, input.reason)
+  const row = getDb()
+    .prepare('SELECT * FROM maintenance_windows WHERE id = ?')
+    .get(result.lastInsertRowid) as MaintenanceDbRow
+  return mapMaintenance(row)
+}
+
+export function deleteMaintenanceWindow(id: number) {
+  getDb().prepare('DELETE FROM maintenance_windows WHERE id = ?').run(id)
+}
+
+export function isInMaintenance(siteId: number, at?: string): boolean {
+  const row = getDb()
+    .prepare(
+      `SELECT COUNT(*) AS n FROM maintenance_windows
+       WHERE site_id = ? AND starts_at <= ? AND ends_at >= ?`,
+    )
+    .get(siteId, at ?? new Date().toISOString(), at ?? new Date().toISOString()) as { n: number }
+  return row.n > 0
 }
 
 // ---------- notifications ----------

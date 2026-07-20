@@ -1,12 +1,11 @@
 import type { CheckRow, CheckStatus, Site } from '#shared/types'
-import { getLatestCheck, insertCheck } from '../db'
+import { closeOpenIncident, getLatestCheck, insertCheck, isInMaintenance, openIncident } from '../db'
 import { detectAndNotify } from '../notifications'
 import { dnsCheck } from './dnsCheck'
 import { httpCheck } from './httpCheck'
 import { evaluateSecurityHeaders } from './securityHeaders'
 import { sslCheck } from './sslCheck'
 
-const DEGRADED_MS = 5000
 const SSL_WARNING_DAYS = 7
 
 export async function runCheck(site: Site): Promise<CheckRow> {
@@ -28,15 +27,19 @@ export async function runCheck(site: Site): Promise<CheckRow> {
   const securityHeaders = httpResult.error ? null : evaluateSecurityHeaders(httpResult.responseHeaders)
 
   let status: CheckStatus
-  if (httpResult.error || httpResult.httpStatus === null || httpResult.httpStatus >= 400) {
+  if (site.expectedStatus !== null) {
+    status = httpResult.httpStatus === site.expectedStatus ? 'up' : 'down'
+  } else if (httpResult.error || httpResult.httpStatus === null || httpResult.httpStatus >= 400) {
     status = 'down'
-  } else if (
-    (httpResult.timeTotal !== null && httpResult.timeTotal > DEGRADED_MS) ||
-    (ssl && ssl.daysRemaining !== null && ssl.daysRemaining < SSL_WARNING_DAYS)
-  ) {
-    status = 'degraded'
   } else {
     status = 'up'
+  }
+  if (
+    status === 'up' &&
+    ((httpResult.timeTotal !== null && httpResult.timeTotal > site.degradedMs) ||
+      (ssl && ssl.daysRemaining !== null && ssl.daysRemaining < SSL_WARNING_DAYS))
+  ) {
+    status = 'degraded'
   }
 
   const previous = getLatestCheck(site.id)
@@ -64,7 +67,18 @@ export async function runCheck(site: Site): Promise<CheckRow> {
     responseHeaders: httpResult.responseHeaders,
   })
 
-  detectAndNotify(site, previous, check)
+  const inMaintenance = isInMaintenance(site.id)
+
+  if (!inMaintenance) {
+    if (status === 'down' && previous?.status !== 'down') {
+      const cause = check.httpStatus ? `HTTP ${check.httpStatus}` : check.error || 'unreachable'
+      openIncident(site.id, cause)
+    } else if (status !== 'down' && previous?.status === 'down') {
+      closeOpenIncident(site.id)
+    }
+
+    detectAndNotify(site, previous, check)
+  }
 
   return check
 }

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { CheckStatus, SiteSummary } from '#shared/types'
+
 const { sites, pending, error, refresh } = useSites()
 
 useHead({ title: 'Site Uptime' })
@@ -13,6 +15,37 @@ onMounted(() => {
 
 watch(viewMode, (mode) => {
   localStorage.setItem('siteUptime.viewMode', mode)
+})
+
+type SortKey = 'status' | 'uptime24h' | 'response'
+const sortKey = ref<SortKey>('status')
+
+function statusRank(status: CheckStatus | null | undefined): number {
+  switch (status) {
+    case 'down':
+      return 0
+    case 'degraded':
+      return 1
+    case 'up':
+      return 2
+    default:
+      return 3
+  }
+}
+
+const sortedCardSites = computed(() => {
+  const list = [...sites.value]
+  list.sort((a: SiteSummary, b: SiteSummary) => {
+    switch (sortKey.value) {
+      case 'uptime24h':
+        return (b.uptime24h ?? -1) - (a.uptime24h ?? -1)
+      case 'response':
+        return (a.latestCheck?.timeTotal ?? Infinity) - (b.latestCheck?.timeTotal ?? Infinity)
+      default:
+        return statusRank(a.latestCheck?.status) - statusRank(b.latestCheck?.status)
+    }
+  })
+  return list
 })
 </script>
 
@@ -31,7 +64,27 @@ watch(viewMode, (mode) => {
     </div>
 
     <template v-else>
-      <div class="flex justify-end">
+      <SummaryBar :sites="sites" />
+
+      <div class="flex items-center justify-between">
+        <div v-if="viewMode === 'cards'" class="flex gap-1 rounded-md border border-slate-800 p-0.5 text-xs">
+          <button
+            v-for="opt in [
+              { label: 'Status', value: 'status' as const },
+              { label: 'Uptime', value: 'uptime24h' as const },
+              { label: 'Response', value: 'response' as const },
+            ]"
+            :key="opt.value"
+            type="button"
+            class="rounded px-2.5 py-1"
+            :class="sortKey === opt.value ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
+            @click="sortKey = opt.value"
+          >
+            Sort: {{ opt.label }}
+          </button>
+        </div>
+        <div v-else />
+
         <div class="flex gap-1 rounded-md border border-slate-800 p-0.5 text-xs">
           <button
             type="button"
@@ -53,7 +106,7 @@ watch(viewMode, (mode) => {
       </div>
 
       <div v-if="viewMode === 'cards'" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <SiteCard v-for="site in sites" :key="site.id" :site="site" @removed="refresh" @checked="refresh" />
+        <SiteCard v-for="site in sortedCardSites" :key="site.id" :site="site" @removed="refresh" @checked="refresh" />
       </div>
       <SitesTable v-else :sites="sites" @removed="refresh" @checked="refresh" />
     </template>

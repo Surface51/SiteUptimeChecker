@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { HistoryPoint, SiteSummary } from '#shared/types'
+import type { DailyUptime, HistoryPoint, IncidentRow, SiteSummary } from '#shared/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -7,6 +7,16 @@ const id = computed(() => Number(route.params.id))
 
 const { data: site, refresh: refreshSite, error: siteError } = await useFetch<SiteSummary>(
   () => `/api/sites/${id.value}`,
+)
+
+const { data: incidents, refresh: refreshIncidents } = await useFetch<IncidentRow[]>(
+  () => `/api/sites/${id.value}/incidents`,
+  { default: () => [] },
+)
+
+const { data: dailyUptime } = await useFetch<DailyUptime[]>(
+  () => `/api/sites/${id.value}/daily`,
+  { default: () => [] },
 )
 
 useHead({ title: () => (site.value ? site.value.name || site.value.url : 'Site Uptime') })
@@ -46,6 +56,7 @@ onMounted(() => {
   interval = setInterval(() => {
     refreshSite()
     refreshHistory()
+    refreshIncidents()
   }, 30_000)
 })
 onUnmounted(() => {
@@ -79,10 +90,24 @@ async function checkNow() {
   }
 }
 
+const toggling = ref(false)
+async function togglePaused() {
+  if (!site.value) return
+  toggling.value = true
+  try {
+    await $fetch(`/api/sites/${id.value}`, { method: 'PATCH', body: { enabled: !site.value.enabled } })
+    await refreshSite()
+  } finally {
+    toggling.value = false
+  }
+}
+
 const isEditing = ref(false)
 const editUrl = ref('')
 const editName = ref('')
 const editInterval = ref(300)
+const editDegradedMs = ref(5000)
+const editExpectedStatus = ref('')
 const editError = ref('')
 const saving = ref(false)
 
@@ -98,6 +123,8 @@ function startEdit() {
   editUrl.value = site.value.url
   editName.value = site.value.name || ''
   editInterval.value = site.value.checkIntervalSeconds
+  editDegradedMs.value = site.value.degradedMs
+  editExpectedStatus.value = site.value.expectedStatus === null ? '' : String(site.value.expectedStatus)
   editError.value = ''
   isEditing.value = true
 }
@@ -112,6 +139,8 @@ async function saveEdit() {
         url: editUrl.value.trim(),
         name: editName.value.trim() || null,
         checkIntervalSeconds: editInterval.value,
+        degradedMs: editDegradedMs.value,
+        expectedStatus: editExpectedStatus.value.trim() === '' ? null : Number(editExpectedStatus.value),
       },
     })
     isEditing.value = false
@@ -163,7 +192,14 @@ async function removeSite() {
         <div class="min-w-0">
           <div class="flex items-center gap-2">
             <h1 class="truncate text-lg font-semibold text-slate-100">{{ site.name || hostname }}</h1>
-            <StatusBadge :status="site.latestCheck?.status ?? null" />
+            <span v-if="!site.enabled" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500">
+              <span class="h-2 w-2 rounded-full bg-slate-600" />
+              Paused
+            </span>
+            <StatusBadge v-else :status="site.latestCheck?.status ?? null" />
+            <span v-if="site.inMaintenance" class="rounded-full bg-sky-900/40 px-2 py-0.5 text-[11px] font-medium text-sky-300">
+              Maintenance
+            </span>
           </div>
           <a :href="site.url" target="_blank" rel="noopener" class="text-sm text-slate-500 hover:text-slate-300">
             {{ site.url }}
@@ -181,6 +217,14 @@ async function removeSite() {
             @click="checkNow"
           >
             {{ checking ? 'Checking…' : 'Check now' }}
+          </button>
+          <button
+            type="button"
+            :disabled="toggling"
+            class="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+            @click="togglePaused"
+          >
+            {{ site.enabled ? 'Pause' : 'Resume' }}
           </button>
           <button
             type="button"
@@ -226,6 +270,27 @@ async function removeSite() {
             >
               <option v-for="opt in intervalOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
+          </div>
+        </div>
+        <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div class="sm:w-44">
+            <label class="mb-1 block text-xs text-slate-500">Degraded threshold (ms)</label>
+            <input
+              v-model.number="editDegradedMs"
+              type="number"
+              min="100"
+              max="60000"
+              class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
+            />
+          </div>
+          <div class="sm:w-44">
+            <label class="mb-1 block text-xs text-slate-500">Expected status (optional)</label>
+            <input
+              v-model="editExpectedStatus"
+              type="text"
+              placeholder="e.g. 401"
+              class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
+            />
           </div>
           <div class="flex gap-2">
             <button
@@ -287,6 +352,11 @@ async function removeSite() {
     </div>
 
     <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+      <h2 class="mb-3 text-sm font-medium text-slate-200">Daily uptime (30d)</h2>
+      <UptimeHeatmap :days="dailyUptime ?? []" />
+    </div>
+
+    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
       <div class="mb-3 flex items-center justify-between">
         <h2 class="text-sm font-medium text-slate-200">Response time</h2>
         <div class="flex gap-1 rounded-md border border-slate-800 p-0.5 text-xs">
@@ -304,6 +374,12 @@ async function removeSite() {
       </div>
       <HistoryChart :points="history ?? []" />
     </div>
+
+    <IncidentList :incidents="incidents ?? []" />
+
+    <MaintenanceManager :site-id="id" />
+
+    <CheckLog :site-id="id" />
 
     <div v-if="site.latestCheck">
       <h2 class="mb-3 text-sm font-medium text-slate-200">Latest check details</h2>

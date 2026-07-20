@@ -7,7 +7,13 @@ import { captureScreenshot } from '../../utils/screenshot'
 const VALID_INTERVALS = new Set([60, 300, 900, 3600])
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{ url?: string; name?: string; checkIntervalSeconds?: number }>(event)
+  const body = await readBody<{
+    url?: string
+    name?: string
+    checkIntervalSeconds?: number
+    degradedMs?: number
+    expectedStatus?: number | null
+  }>(event)
 
   if (!body?.url || typeof body.url !== 'string') {
     throw createError({ statusCode: 400, statusMessage: 'url is required' })
@@ -28,10 +34,23 @@ export default defineEventHandler(async (event) => {
     ? (body.checkIntervalSeconds ?? 300)
     : 300
 
+  if (body.degradedMs !== undefined && (!Number.isInteger(body.degradedMs) || body.degradedMs < 100 || body.degradedMs > 60_000)) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid degraded threshold' })
+  }
+  if (
+    body.expectedStatus !== undefined &&
+    body.expectedStatus !== null &&
+    (!Number.isInteger(body.expectedStatus) || body.expectedStatus < 100 || body.expectedStatus > 599)
+  ) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid expected status' })
+  }
+
   const site = insertSite({
     url,
     name: body.name?.trim() || null,
     checkIntervalSeconds,
+    degradedMs: body.degradedMs,
+    expectedStatus: body.expectedStatus ?? null,
   })
 
   // Fire the initial check and screenshot in the background — don't make the caller wait for them.

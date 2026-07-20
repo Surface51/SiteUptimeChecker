@@ -20,6 +20,8 @@ export default defineEventHandler(async (event) => {
     name?: string | null
     checkIntervalSeconds?: number
     enabled?: boolean
+    degradedMs?: number
+    expectedStatus?: number | null
   }>(event)
 
   const patch: Parameters<typeof updateSite>[1] = {}
@@ -39,6 +41,18 @@ export default defineEventHandler(async (event) => {
     patch.checkIntervalSeconds = body.checkIntervalSeconds
   }
   if (body.enabled !== undefined) patch.enabled = body.enabled
+  if (body.degradedMs !== undefined) {
+    if (!Number.isInteger(body.degradedMs) || body.degradedMs < 100 || body.degradedMs > 60_000) {
+      throw createError({ statusCode: 400, statusMessage: 'Invalid degraded threshold' })
+    }
+    patch.degradedMs = body.degradedMs
+  }
+  if (body.expectedStatus !== undefined) {
+    if (body.expectedStatus !== null && (!Number.isInteger(body.expectedStatus) || body.expectedStatus < 100 || body.expectedStatus > 599)) {
+      throw createError({ statusCode: 400, statusMessage: 'Invalid expected status' })
+    }
+    patch.expectedStatus = body.expectedStatus
+  }
 
   const site = updateSite(id, patch)!
 
