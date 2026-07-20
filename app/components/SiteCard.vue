@@ -1,0 +1,119 @@
+<script setup lang="ts">
+import type { SiteSummary } from '#shared/types'
+
+const props = defineProps<{ site: SiteSummary }>()
+const emit = defineEmits<{ removed: [], checked: [] }>()
+
+const checking = ref(false)
+
+const hostname = computed(() => {
+  try {
+    return new URL(props.site.url).hostname
+  } catch {
+    return props.site.url
+  }
+})
+
+const uptimeLabel = computed(() =>
+  props.site.uptime24h === null ? '—' : `${props.site.uptime24h.toFixed(1)}%`,
+)
+
+const responseLabel = computed(() => {
+  const t = props.site.latestCheck?.timeTotal
+  return t == null ? '—' : `${Math.round(t)} ms`
+})
+
+const screenshotSrc = computed(() => {
+  if (!props.site.screenshotUpdatedAt) return null
+  return `/screenshots/${props.site.id}.png?v=${encodeURIComponent(props.site.screenshotUpdatedAt)}`
+})
+
+const screenshotFailed = ref(false)
+watch(
+  () => props.site.screenshotUpdatedAt,
+  () => {
+    screenshotFailed.value = false
+  },
+)
+
+async function remove() {
+  if (!confirm(`Remove ${props.site.name || hostname.value}?`)) return
+  await $fetch(`/api/sites/${props.site.id}`, { method: 'DELETE' })
+  emit('removed')
+}
+
+async function checkNow() {
+  checking.value = true
+  try {
+    await $fetch(`/api/sites/${props.site.id}/check`, { method: 'POST' })
+    emit('checked')
+  } finally {
+    checking.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="group relative rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden hover:border-slate-700 transition-colors">
+    <NuxtLink :to="`/sites/${site.id}`" class="block">
+      <div class="aspect-video w-full bg-slate-800/60 overflow-hidden">
+        <img
+          v-if="screenshotSrc && !screenshotFailed"
+          :src="screenshotSrc"
+          alt=""
+          class="h-full w-full object-cover object-top"
+          @error="screenshotFailed = true"
+        />
+        <div v-else class="flex h-full w-full items-center justify-center text-slate-600">
+          <span class="text-3xl">🌐</span>
+        </div>
+      </div>
+      <div class="p-4">
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="truncate font-medium text-slate-100">{{ site.name || hostname }}</h3>
+          <StatusBadge :status="site.latestCheck?.status ?? null" />
+        </div>
+        <p class="mt-0.5 truncate text-xs text-slate-500">{{ hostname }}</p>
+
+        <div class="mt-3 flex items-center justify-between text-sm">
+          <div>
+            <div class="text-slate-500 text-xs">Uptime (24h)</div>
+            <div class="text-slate-200">{{ uptimeLabel }}</div>
+          </div>
+          <div class="text-right">
+            <div class="text-slate-500 text-xs">Response</div>
+            <div class="text-slate-200">{{ responseLabel }}</div>
+          </div>
+        </div>
+
+        <div class="mt-2 flex items-center justify-between gap-2">
+          <Sparkline :points="site.sparkline" />
+          <span
+            v-if="site.latestCheck?.sslDaysRemaining !== null && site.latestCheck?.sslDaysRemaining !== undefined && site.latestCheck.sslDaysRemaining < 14"
+            class="whitespace-nowrap rounded-full bg-amber-900/40 px-2 py-0.5 text-[11px] font-medium text-amber-300"
+          >
+            SSL expires in {{ site.latestCheck.sslDaysRemaining }}d
+          </span>
+        </div>
+      </div>
+    </NuxtLink>
+
+    <div class="absolute right-2 top-2 hidden gap-1.5 group-hover:flex">
+      <button
+        type="button"
+        :disabled="checking"
+        class="rounded-md bg-slate-950/70 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+        @click.stop.prevent="checkNow"
+      >
+        {{ checking ? 'Checking…' : 'Check now' }}
+      </button>
+      <button
+        type="button"
+        class="rounded-md bg-slate-950/70 px-2 py-1 text-xs text-slate-300 hover:bg-rose-900/70 hover:text-rose-200"
+        @click.stop.prevent="remove"
+      >
+        Remove
+      </button>
+    </div>
+  </div>
+</template>
