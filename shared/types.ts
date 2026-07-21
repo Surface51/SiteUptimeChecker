@@ -78,6 +78,7 @@ export interface SiteSummary extends Site {
   openIncident: IncidentRow | null
   inMaintenance: boolean
   latestPerformance: number | null
+  latestPerformanceDesktop: number | null
 }
 
 export interface HistoryPoint {
@@ -143,4 +144,20 @@ export interface NotificationRow {
   message: string
   createdAt: string
   read: boolean
+  dismissed: boolean
+}
+
+export type LighthouseJobStatus = 'queued' | 'running' | 'done' | 'error'
+
+export interface LighthouseJob {
+  id: string
+  siteId: number
+  siteLabel: string
+  formFactor: LighthouseFormFactor
+  status: LighthouseJobStatus
+  phase: string | null
+  queuedAt: string
+  startedAt: string | null
+  finishedAt: string | null
+  error: string | null
 }

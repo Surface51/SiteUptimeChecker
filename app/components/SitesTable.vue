@@ -4,7 +4,16 @@ import type { CheckStatus, SiteSummary } from '#shared/types'
 const props = defineProps<{ sites: SiteSummary[] }>()
 const emit = defineEmits<{ removed: [], checked: [] }>()
 
-type SortKey = 'name' | 'status' | 'uptime24h' | 'uptime7d' | 'response' | 'sslDays' | 'lastChecked' | 'performance'
+type SortKey =
+  | 'name'
+  | 'status'
+  | 'uptime24h'
+  | 'uptime7d'
+  | 'response'
+  | 'sslDays'
+  | 'lastChecked'
+  | 'performance'
+  | 'performanceDesktop'
 
 const sortKey = ref<SortKey>('status')
 const sortDir = ref<'asc' | 'desc'>('asc')
@@ -78,6 +87,8 @@ const sortedSites = computed(() => {
         return compareNullable(timeOf(a.latestCheck?.checkedAt), timeOf(b.latestCheck?.checkedAt), dir)
       case 'performance':
         return compareNullable(a.latestPerformance, b.latestPerformance, dir)
+      case 'performanceDesktop':
+        return compareNullable(a.latestPerformanceDesktop, b.latestPerformanceDesktop, dir)
       default:
         return 0
     }
@@ -92,7 +103,8 @@ const columns: { key: SortKey; label: string; align?: 'right' }[] = [
   { key: 'uptime24h', label: 'Uptime 24h', align: 'right' },
   { key: 'uptime7d', label: 'Uptime 7d', align: 'right' },
   { key: 'response', label: 'Response', align: 'right' },
-  { key: 'performance', label: 'Performance', align: 'right' },
+  { key: 'performance', label: 'Perf · Mobile', align: 'right' },
+  { key: 'performanceDesktop', label: 'Perf · Desktop', align: 'right' },
   { key: 'sslDays', label: 'SSL days', align: 'right' },
   { key: 'lastChecked', label: 'Last checked', align: 'right' },
 ]
@@ -139,7 +151,7 @@ async function checkNow(site: SiteSummary) {
 
 <template>
   <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/50">
-    <table class="w-full min-w-[720px] border-collapse text-sm">
+    <table class="w-full min-w-[820px] border-collapse text-sm">
       <thead>
         <tr class="border-b border-slate-800 text-left text-xs text-slate-500">
           <th
@@ -181,6 +193,16 @@ async function checkNow(site: SiteSummary) {
               :class="performanceColor(site.latestPerformance)"
             >
               {{ site.latestPerformance }}
+            </span>
+            <span v-else class="text-slate-500">—</span>
+          </td>
+          <td class="px-4 py-2.5 text-right">
+            <span
+              v-if="site.latestPerformanceDesktop !== null"
+              class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+              :class="performanceColor(site.latestPerformanceDesktop)"
+            >
+              {{ site.latestPerformanceDesktop }}
             </span>
             <span v-else class="text-slate-500">—</span>
           </td>

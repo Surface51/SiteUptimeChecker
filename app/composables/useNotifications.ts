@@ -1,9 +1,18 @@
-import type { NotificationRow } from '#shared/types'
+import type { NotificationRow, NotificationType } from '#shared/types'
 
 const DESKTOP_PREF_KEY = 'siteUptime.desktopNotifications'
 
+const TOAST_TYPE: Record<NotificationType, 'success' | 'warning' | 'error'> = {
+  up: 'success',
+  down: 'error',
+  degraded: 'warning',
+  ssl_expiring: 'warning',
+  lighthouse_regression: 'warning',
+}
+
 export function useNotifications() {
   const { data, refresh } = useFetch<NotificationRow[]>('/api/notifications', { default: () => [] })
+  const { push: pushToast } = useToasts()
 
   const unreadCount = computed(() => (data.value ?? []).filter((n) => !n.read).length)
   const desktopEnabled = ref(false)
@@ -15,14 +24,17 @@ export function useNotifications() {
 
   async function pollAndNotify() {
     await refresh()
-    if (!desktopEnabled.value || typeof Notification === 'undefined' || Notification.permission !== 'granted') {
-      seedKnownIds()
-      return
-    }
+    const canDesktopNotify =
+      desktopEnabled.value && typeof Notification !== 'undefined' && Notification.permission === 'granted'
+
     for (const n of data.value ?? []) {
       if (!knownIds.has(n.id)) {
         knownIds.add(n.id)
-        new Notification('Site Uptime', { body: n.message })
+        // In-app toast fires regardless of desktop-notification permission.
+        pushToast(n.message, TOAST_TYPE[n.type] ?? 'info')
+        if (canDesktopNotify) {
+          new Notification('Site Uptime', { body: n.message })
+        }
       }
     }
   }
@@ -64,12 +76,18 @@ export function useNotifications() {
     for (const n of data.value ?? []) n.read = true
   }
 
+  async function dismissAll() {
+    await $fetch('/api/notifications/dismiss-all', { method: 'POST' })
+    await refresh()
+  }
+
   return {
     notifications: data,
     unreadCount,
     refresh,
     markRead,
     markAllRead,
+    dismissAll,
     desktopEnabled,
     enableDesktopNotifications,
     disableDesktopNotifications,

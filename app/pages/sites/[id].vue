@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import type { DailyUptime, HistoryPoint, IncidentRow, LighthouseFormFactor, LighthouseReport, SiteSummary } from '#shared/types'
+import type {
+  DailyUptime,
+  HistoryPoint,
+  IncidentRow,
+  LighthouseFormFactor,
+  LighthouseReport,
+  NotificationRow,
+  SiteSummary,
+} from '#shared/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,6 +19,11 @@ const { data: site, refresh: refreshSite, error: siteError } = await useFetch<Si
 
 const { data: incidents, refresh: refreshIncidents } = await useFetch<IncidentRow[]>(
   () => `/api/sites/${id.value}/incidents`,
+  { default: () => [] },
+)
+
+const { data: siteNotifications, refresh: refreshNotifications } = await useFetch<NotificationRow[]>(
+  () => `/api/sites/${id.value}/notifications`,
   { default: () => [] },
 )
 
@@ -65,6 +78,7 @@ onMounted(() => {
     refreshHistory()
     refreshIncidents()
     refreshLighthouse()
+    refreshNotifications()
   }, 30_000)
 })
 onUnmounted(() => {
@@ -92,7 +106,7 @@ async function checkNow() {
   checking.value = true
   try {
     await $fetch(`/api/sites/${id.value}/check`, { method: 'POST' })
-    await Promise.all([refreshSite(), refreshHistory()])
+    await Promise.all([refreshSite(), refreshHistory(), refreshNotifications()])
   } finally {
     checking.value = false
   }
@@ -390,12 +404,14 @@ async function removeSite() {
         :form-factor="lhFormFactor"
         :history="lighthouseHistory ?? []"
         @update:form-factor="lhFormFactor = $event"
-        @ran="refreshLighthouse"
+        @ran="() => { refreshLighthouse(); refreshNotifications() }"
       />
       <div class="mt-4">
         <LighthouseChart :points="lighthouseHistory ?? []" />
       </div>
     </div>
+
+    <SiteNotifications :notifications="siteNotifications ?? []" />
 
     <IncidentList :incidents="incidents ?? []" />
 

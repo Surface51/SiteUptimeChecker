@@ -66,14 +66,15 @@ function delta(config: TileConfig): { text: string; color: string } | null {
   return { text: `${arrow} ${magnitude}`, color: improved ? 'text-emerald-400' : 'text-rose-400' }
 }
 
+const { ping: pingProgress } = useLighthouseProgress()
+
 const running = ref(false)
 async function runLighthouse() {
   running.value = true
+  pingProgress()
   try {
-    await $fetch(`/api/sites/${props.siteId}/lighthouse`, {
-      method: 'POST',
-      query: { formFactor: props.formFactor },
-    })
+    // Omitting formFactor runs BOTH mobile and desktop in one call (serialized server-side).
+    await $fetch(`/api/sites/${props.siteId}/lighthouse`, { method: 'POST' })
     emit('ran')
   } finally {
     running.value = false
@@ -112,7 +113,7 @@ function formatTime(iso: string) {
         class="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
         @click="runLighthouse"
       >
-        {{ running ? 'Running…' : 'Run Lighthouse' }}
+        {{ running ? 'Running…' : 'Run reports' }}
       </button>
     </div>
 

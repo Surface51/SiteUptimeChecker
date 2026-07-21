@@ -155,6 +155,9 @@ function migrate(db: Database.Database) {
   if (!hasColumn(db, 'sites', 'expected_status')) {
     db.exec(`ALTER TABLE sites ADD COLUMN expected_status INTEGER`)
   }
+  if (!hasColumn(db, 'notifications', 'dismissed')) {
+    db.exec(`ALTER TABLE notifications ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0`)
+  }
 }
 
 export function closeDb() {
@@ -518,6 +521,7 @@ export function buildSiteSummary(site: Site): SiteSummary {
     openIncident: getOpenIncident(site.id),
     inMaintenance: isInMaintenance(site.id),
     latestPerformance: getLatestLighthouseReport(site.id, 'mobile')?.performance ?? null,
+    latestPerformanceDesktop: getLatestLighthouseReport(site.id, 'desktop')?.performance ?? null,
   }
 }
 
@@ -758,6 +762,7 @@ interface NotificationDbRow {
   message: string
   created_at: string
   read: number
+  dismissed: number
   site_name: string | null
   site_url: string
 }
@@ -772,6 +777,7 @@ function mapNotification(row: NotificationDbRow): NotificationRow {
     message: row.message,
     createdAt: row.created_at,
     read: !!row.read,
+    dismissed: !!row.dismissed,
   }
 }
 
@@ -781,15 +787,60 @@ export function insertNotification(input: { siteId: number; type: NotificationTy
     .run(input.siteId, input.type, input.message)
 }
 
-export function listNotifications(limit = 50): NotificationRow[] {
+export interface NotificationFilter {
+  limit: number
+  offset?: number
+  siteId?: number
+  type?: NotificationType
+  unreadOnly?: boolean
+  /** Dismissed notifications are excluded by default (the bell only wants "active" ones). */
+  includeDismissed?: boolean
+}
+
+function buildNotificationWhere(filter: Omit<NotificationFilter, 'limit' | 'offset'>): {
+  clause: string
+  params: (string | number)[]
+} {
+  const conditions: string[] = []
+  const params: (string | number)[] = []
+
+  if (!filter.includeDismissed) {
+    conditions.push('n.dismissed = 0')
+  }
+  if (filter.siteId !== undefined) {
+    conditions.push('n.site_id = ?')
+    params.push(filter.siteId)
+  }
+  if (filter.type) {
+    conditions.push('n.type = ?')
+    params.push(filter.type)
+  }
+  if (filter.unreadOnly) {
+    conditions.push('n.read = 0')
+  }
+
+  return { clause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', params }
+}
+
+export function listNotifications(filter: NotificationFilter): NotificationRow[] {
+  const { clause, params } = buildNotificationWhere(filter)
   const rows = getDb()
     .prepare(
       `SELECT n.*, s.name AS site_name, s.url AS site_url
        FROM notifications n JOIN sites s ON s.id = n.site_id
-       ORDER BY n.created_at DESC LIMIT ?`,
+       ${clause}
+       ORDER BY n.created_at DESC LIMIT ? OFFSET ?`,
     )
-    .all(limit) as NotificationDbRow[]
+    .all(...params, filter.limit, filter.offset ?? 0) as NotificationDbRow[]
   return rows.map(mapNotification)
+}
+
+export function countNotifications(filter: Omit<NotificationFilter, 'limit' | 'offset'> = {}): number {
+  const { clause, params } = buildNotificationWhere(filter)
+  const row = getDb()
+    .prepare(`SELECT COUNT(*) AS n FROM notifications n ${clause}`)
+    .get(...params) as { n: number }
+  return row.n
 }
 
 export function markNotificationRead(id: number) {
@@ -798,4 +849,14 @@ export function markNotificationRead(id: number) {
 
 export function markAllNotificationsRead() {
   getDb().prepare('UPDATE notifications SET read = 1 WHERE read = 0').run()
+}
+
+export function dismissAllNotifications(filter?: { siteId?: number }) {
+  if (filter?.siteId !== undefined) {
+    getDb()
+      .prepare('UPDATE notifications SET dismissed = 1 WHERE dismissed = 0 AND site_id = ?')
+      .run(filter.siteId)
+  } else {
+    getDb().prepare('UPDATE notifications SET dismissed = 1 WHERE dismissed = 0').run()
+  }
 }

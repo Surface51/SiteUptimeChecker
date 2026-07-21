@@ -1,7 +1,7 @@
 import * as chromeLauncher from 'chrome-launcher'
 import lighthouse, { desktopConfig } from 'lighthouse'
 import { chromium } from 'playwright'
-import type { LighthouseFormFactor, LighthouseReport, Site } from '#shared/types'
+import type { LighthouseFormFactor, LighthouseJob, LighthouseReport, Site } from '#shared/types'
 import { getLatestLighthouseReport, insertLighthouseReport, insertNotification, listSites } from './db'
 
 const ONLY_CATEGORIES = ['performance', 'accessibility', 'best-practices', 'seo']
@@ -13,8 +13,63 @@ const FORM_FACTORS: LighthouseFormFactor[] = ['mobile', 'desktop']
 let lighthouseQueue: Promise<void> = Promise.resolve()
 let warnedFailure = false
 
+// ---------- in-memory job/progress tracking ----------
+// Not persisted — this is best-effort UI feedback for the current server process, not an
+// audit log. Runs are already serialized through `lighthouseQueue`, so "active" is at most
+// one running job plus everything still queued behind it.
+
+const MAX_RECENT_JOBS = 20
+let jobSeq = 0
+const jobs = new Map<string, LighthouseJob>()
+
+function nowIso(): string {
+  return new Date().toISOString()
+}
+
+function createJob(site: Site, formFactor: LighthouseFormFactor): LighthouseJob {
+  const job: LighthouseJob = {
+    id: `lh-${Date.now()}-${++jobSeq}`,
+    siteId: site.id,
+    siteLabel: site.name || site.url,
+    formFactor,
+    status: 'queued',
+    phase: 'Queued',
+    queuedAt: nowIso(),
+    startedAt: null,
+    finishedAt: null,
+    error: null,
+  }
+  jobs.set(job.id, job)
+  return job
+}
+
+function updateJob(id: string, patch: Partial<LighthouseJob>) {
+  const job = jobs.get(id)
+  if (!job) return
+  Object.assign(job, patch)
+  if (patch.status === 'done' || patch.status === 'error') pruneFinishedJobs()
+}
+
+function pruneFinishedJobs() {
+  const finished = [...jobs.values()]
+    .filter((j) => j.status === 'done' || j.status === 'error')
+    .sort((a, b) => (a.finishedAt ?? '').localeCompare(b.finishedAt ?? ''))
+  const excess = finished.length - MAX_RECENT_JOBS
+  for (let i = 0; i < excess; i++) jobs.delete(finished[i]!.id)
+}
+
+export function getLighthouseProgress(): { active: LighthouseJob[]; recent: LighthouseJob[] } {
+  const all = [...jobs.values()]
+  const active = all.filter((j) => j.status === 'queued' || j.status === 'running')
+  const recent = all
+    .filter((j) => j.status === 'done' || j.status === 'error')
+    .sort((a, b) => (b.finishedAt ?? '').localeCompare(a.finishedAt ?? ''))
+  return { active, recent }
+}
+
 export function enqueueLighthouse(site: Site, formFactor: LighthouseFormFactor): Promise<LighthouseReport> {
-  const task = lighthouseQueue.then(() => runLighthouseNow(site, formFactor))
+  const job = createJob(site, formFactor)
+  const task = lighthouseQueue.then(() => runLighthouseNow(site, formFactor, job.id))
   lighthouseQueue = task.then(
     () => undefined,
     (err) => {
@@ -29,13 +84,21 @@ export function enqueueLighthouse(site: Site, formFactor: LighthouseFormFactor):
   return task
 }
 
-export async function runLighthouseNow(site: Site, formFactor: LighthouseFormFactor): Promise<LighthouseReport> {
+export async function runLighthouseNow(
+  site: Site,
+  formFactor: LighthouseFormFactor,
+  jobId?: string,
+): Promise<LighthouseReport> {
+  if (jobId) updateJob(jobId, { status: 'running', startedAt: nowIso(), phase: 'Launching browser' })
+
   let chrome: chromeLauncher.LaunchedChrome | null = null
   try {
     chrome = await chromeLauncher.launch({
       chromePath: chromium.executablePath(),
       chromeFlags: ['--headless', '--no-sandbox', '--disable-gpu'],
     })
+
+    if (jobId) updateJob(jobId, { phase: `Auditing ${site.url}` })
 
     const result = await lighthouse(
       site.url,
@@ -46,6 +109,8 @@ export async function runLighthouseNow(site: Site, formFactor: LighthouseFormFac
     if (!result) {
       throw new Error('Lighthouse produced no result')
     }
+
+    if (jobId) updateJob(jobId, { phase: 'Processing results' })
 
     const { lhr } = result
     const categoryScore = (id: string) => {
@@ -78,8 +143,12 @@ export async function runLighthouseNow(site: Site, formFactor: LighthouseFormFac
 
     checkRegression(site, formFactor, previous, report)
 
+    if (jobId) updateJob(jobId, { status: 'done', phase: 'Done', finishedAt: nowIso() })
+
     return report
   } catch (err: any) {
+    const message = err?.message || String(err)
+    if (jobId) updateJob(jobId, { status: 'error', phase: 'Failed', finishedAt: nowIso(), error: message })
     return insertLighthouseReport({
       siteId: site.id,
       formFactor,
@@ -94,7 +163,7 @@ export async function runLighthouseNow(site: Site, formFactor: LighthouseFormFac
       speedIndex: null,
       tti: null,
       lighthouseVersion: null,
-      error: err?.message || String(err),
+      error: message,
     })
   } finally {
     chrome?.kill()
@@ -118,6 +187,19 @@ function checkRegression(
       message: `${label} Performance (${formFactor}) dropped from ${previous.performance} to ${current.performance}`,
     })
   }
+}
+
+/** Enqueues both form factors for every enabled site. Returns how many jobs were queued. */
+export function enqueueLighthouseForAllSites(): number {
+  let queued = 0
+  for (const site of listSites()) {
+    if (!site.enabled) continue
+    for (const formFactor of FORM_FACTORS) {
+      enqueueLighthouse(site, formFactor)
+      queued++
+    }
+  }
+  return queued
 }
 
 function hasReportToday(siteId: number, formFactor: LighthouseFormFactor): boolean {

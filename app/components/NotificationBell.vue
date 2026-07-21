@@ -6,6 +6,7 @@ const {
   unreadCount,
   markRead,
   markAllRead,
+  dismissAll,
   desktopEnabled,
   enableDesktopNotifications,
   disableDesktopNotifications,
@@ -37,22 +38,8 @@ async function toggleDesktop() {
   }
 }
 
-const typeIcon: Record<string, string> = {
-  down: '🔴',
-  up: '🟢',
-  degraded: '🟡',
-  ssl_expiring: '🔒',
-  lighthouse_regression: '📉',
-}
-
-function formatRelative(iso: string) {
-  const t = new Date(`${iso.replace(' ', 'T')}Z`).getTime()
-  const diffSec = Math.round((Date.now() - t) / 1000)
-  if (diffSec < 60) return `${diffSec}s ago`
-  if (diffSec < 3600) return `${Math.round(diffSec / 60)}m ago`
-  if (diffSec < 86400) return `${Math.round(diffSec / 3600)}h ago`
-  return `${Math.round(diffSec / 86400)}d ago`
-}
+const typeIcon = notificationTypeIcon
+const formatRelative = formatRelativeTime
 </script>
 
 <template>
@@ -88,6 +75,14 @@ function formatRelative(iso: string) {
           >
             Mark all read
           </button>
+          <button
+            v-if="notifications.length"
+            type="button"
+            class="text-xs text-slate-500 hover:text-rose-300"
+            @click="dismissAll"
+          >
+            Clear
+          </button>
         </div>
       </div>
 
@@ -108,6 +103,12 @@ function formatRelative(iso: string) {
           </div>
           <span v-if="!n.read" class="mt-1 h-2 w-2 shrink-0 rounded-full bg-sky-400" />
         </button>
+      </div>
+
+      <div class="border-t border-slate-800 px-3 py-2 text-center">
+        <NuxtLink to="/notifications" class="text-xs text-sky-400 hover:text-sky-300" @click="close">
+          View all →
+        </NuxtLink>
       </div>
     </div>
   </div>

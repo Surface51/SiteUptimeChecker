@@ -2,8 +2,37 @@
 import type { CheckStatus, SiteSummary } from '#shared/types'
 
 const { sites, pending, error, refresh } = useSites()
+const { ping: pingProgress } = useLighthouseProgress()
+const { push: pushToast } = useToasts()
 
 useHead({ title: 'Site Uptime' })
+
+const checkingAll = ref(false)
+async function checkAllNow() {
+  checkingAll.value = true
+  try {
+    const result = await $fetch<{ checked: number; failed: number }>('/api/sites/check-all', { method: 'POST' })
+    pushToast(
+      result.failed > 0 ? `Checked ${result.checked} sites, ${result.failed} failed` : `Checked ${result.checked} sites`,
+      result.failed > 0 ? 'warning' : 'success',
+    )
+    await refresh()
+  } finally {
+    checkingAll.value = false
+  }
+}
+
+const runningAllLighthouse = ref(false)
+async function runAllLighthouse() {
+  runningAllLighthouse.value = true
+  pingProgress()
+  try {
+    const result = await $fetch<{ queued: number }>('/api/lighthouse/run-all', { method: 'POST' })
+    pushToast(`Queued ${result.queued} Lighthouse reports`, 'info')
+  } finally {
+    runningAllLighthouse.value = false
+  }
+}
 
 type ViewMode = 'cards' | 'table'
 const viewMode = ref<ViewMode>('cards')
@@ -65,6 +94,25 @@ const sortedCardSites = computed(() => {
 
     <template v-else>
       <SummaryBar :sites="sites" />
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          :disabled="checkingAll"
+          class="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+          @click="checkAllNow"
+        >
+          {{ checkingAll ? 'Checking all…' : 'Check all sites' }}
+        </button>
+        <button
+          type="button"
+          :disabled="runningAllLighthouse"
+          class="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+          @click="runAllLighthouse"
+        >
+          {{ runningAllLighthouse ? 'Queuing…' : 'Run all Lighthouse reports' }}
+        </button>
+      </div>
 
       <div class="flex items-center justify-between">
         <div v-if="viewMode === 'cards'" class="flex gap-1 rounded-md border border-slate-800 p-0.5 text-xs">
