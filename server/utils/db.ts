@@ -19,7 +19,7 @@ import type {
   StatusTick,
 } from '#shared/types'
 
-const DATA_DIR = join(process.cwd(), '.data')
+const DATA_DIR = process.env.UPTIME_DATA_DIR ?? join(process.cwd(), '.data')
 const SCREENSHOTS_DIR = join(DATA_DIR, 'screenshots')
 const DB_PATH = join(DATA_DIR, 'uptime.db')
 

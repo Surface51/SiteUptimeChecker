@@ -1,12 +1,11 @@
-import type { CheckRow, CheckStatus, Site } from '#shared/types'
+import type { CheckRow, Site } from '#shared/types'
 import { closeOpenIncident, getLatestCheck, insertCheck, isInMaintenance, openIncident } from '../db'
 import { detectAndNotify } from '../notifications'
+import { determineStatus } from './status'
 import { dnsCheck } from './dnsCheck'
 import { httpCheck } from './httpCheck'
 import { evaluateSecurityHeaders } from './securityHeaders'
 import { sslCheck } from './sslCheck'
-
-const SSL_WARNING_DAYS = 7
 
 export async function runCheck(site: Site): Promise<CheckRow> {
   const startUrl = new URL(site.url)
@@ -26,21 +25,14 @@ export async function runCheck(site: Site): Promise<CheckRow> {
   const dnsResult = await dnsCheck(startUrl.hostname)
   const securityHeaders = httpResult.error ? null : evaluateSecurityHeaders(httpResult.responseHeaders)
 
-  let status: CheckStatus
-  if (site.expectedStatus !== null) {
-    status = httpResult.httpStatus === site.expectedStatus ? 'up' : 'down'
-  } else if (httpResult.error || httpResult.httpStatus === null || httpResult.httpStatus >= 400) {
-    status = 'down'
-  } else {
-    status = 'up'
-  }
-  if (
-    status === 'up' &&
-    ((httpResult.timeTotal !== null && httpResult.timeTotal > site.degradedMs) ||
-      (ssl && ssl.daysRemaining !== null && ssl.daysRemaining < SSL_WARNING_DAYS))
-  ) {
-    status = 'degraded'
-  }
+  const status = determineStatus({
+    expectedStatus: site.expectedStatus,
+    httpStatus: httpResult.httpStatus,
+    error: httpResult.error,
+    timeTotal: httpResult.timeTotal,
+    degradedMs: site.degradedMs,
+    sslDaysRemaining: ssl?.daysRemaining ?? null,
+  })
 
   const previous = getLatestCheck(site.id)
 
