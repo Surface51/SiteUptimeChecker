@@ -13,11 +13,11 @@ const option = computed<EChartsOption>(() => ({
       max: 100,
       radius: '95%',
       center: ['50%', '65%'],
-      progress: { show: true, width: 10 },
+      progress: { show: true, width: 7 },
       itemStyle: { color: chartColors.sky },
       axisLine: {
         lineStyle: {
-          width: 10,
+          width: 7,
           color: [
             [0.95, chartColors.rose],
             [0.99, chartColors.amber],
@@ -35,7 +35,7 @@ const option = computed<EChartsOption>(() => ({
         valueAnimation: false,
         formatter: (value: number) => `${value.toFixed(2)}%`,
         color: chartColors.textStrong,
-        fontSize: 18,
+        fontSize: 15,
         fontWeight: 600,
         offsetCenter: [0, '-8%'],
       },
@@ -48,9 +48,9 @@ const option = computed<EChartsOption>(() => ({
 <template>
   <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-2">
     <div class="px-2 pt-2 text-xs text-slate-500">{{ label }}</div>
-    <div v-if="value !== null" class="h-20">
+    <div v-if="value !== null" class="h-24">
       <BaseChart :option="option" />
     </div>
-    <div v-else class="flex h-20 items-center justify-center text-2xl font-semibold text-slate-100">—</div>
+    <div v-else class="flex h-24 items-center justify-center text-2xl font-semibold text-slate-100">—</div>
   </div>
 </template>
