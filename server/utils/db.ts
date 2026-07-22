@@ -4,6 +4,9 @@ import Database from 'better-sqlite3'
 import type {
   CheckRow,
   CheckStatus,
+  CompareIncidentStats,
+  ComparePhaseAverages,
+  CompareRow,
   DailyUptime,
   DnsRecords,
   IncidentRow,
@@ -454,6 +457,43 @@ export function getHistory(siteId: number, hours: number, limit: number) {
   }))
 }
 
+export interface ResponseStats {
+  avgMs: number | null
+  p95Ms: number | null
+  count: number
+}
+
+export function getResponseStats(siteId: number, hours: number): ResponseStats {
+  const rows = getDb()
+    .prepare(
+      `SELECT time_total FROM checks
+       WHERE site_id = ? AND checked_at >= datetime('now', ?) AND time_total IS NOT NULL
+       ORDER BY time_total ASC`,
+    )
+    .all(siteId, `-${hours} hours`) as { time_total: number }[]
+  if (!rows.length) return { avgMs: null, p95Ms: null, count: 0 }
+
+  const values = rows.map((r) => r.time_total)
+  const avgMs = values.reduce((a, b) => a + b, 0) / values.length
+  const idx = Math.min(values.length - 1, Math.ceil(values.length * 0.95) - 1)
+  return { avgMs, p95Ms: values[idx] ?? null, count: values.length }
+}
+
+export function getPhaseAverages(siteId: number, hours: number): ComparePhaseAverages {
+  const row = getDb()
+    .prepare(
+      `SELECT AVG(time_dns) AS dns, AVG(time_tcp) AS tcp, AVG(time_tls) AS tls, AVG(time_ttfb) AS ttfb
+       FROM checks WHERE site_id = ? AND checked_at >= datetime('now', ?)`,
+    )
+    .get(siteId, `-${hours} hours`) as {
+    dns: number | null
+    tcp: number | null
+    tls: number | null
+    ttfb: number | null
+  }
+  return { dns: row.dns, tcp: row.tcp, tls: row.tls, ttfb: row.ttfb }
+}
+
 export function getStatusTicks(siteId: number, limit = 40): StatusTick[] {
   const rows = getDb()
     .prepare(
@@ -531,6 +571,35 @@ export function buildSiteSummary(site: Site): SiteSummary {
   }
 }
 
+/** Skips any id that doesn't resolve to an existing site. */
+export function buildComparison(siteIds: number[], hours: number): CompareRow[] {
+  return siteIds
+    .map((id) => getSite(id))
+    .filter((s): s is Site => s !== null)
+    .map((site) => {
+      const responseStats = getResponseStats(site.id, hours)
+      const lighthouse = getLatestLighthouseReport(site.id, 'mobile')
+      return {
+        site: { id: site.id, name: site.name, url: site.url },
+        uptime24h: getUptime(site.id, 24),
+        uptime7d: getUptime(site.id, 24 * 7),
+        uptime30d: getUptime(site.id, 24 * 30),
+        avgMs: responseStats.avgMs,
+        p95Ms: responseStats.p95Ms,
+        phases: getPhaseAverages(site.id, hours),
+        incidents: getIncidentStats(site.id, hours),
+        sslDaysRemaining: getLatestCheck(site.id)?.sslDaysRemaining ?? null,
+        lighthouse: {
+          performance: lighthouse?.performance ?? null,
+          accessibility: lighthouse?.accessibility ?? null,
+          bestPractices: lighthouse?.bestPractices ?? null,
+          seo: lighthouse?.seo ?? null,
+        },
+        series: getHistory(site.id, hours, 2000),
+      }
+    })
+}
+
 // ---------- incidents ----------
 
 interface IncidentDbRow {
@@ -580,6 +649,14 @@ export function listIncidents(siteId: number, limit = 50): IncidentRow[] {
     .prepare('SELECT * FROM incidents WHERE site_id = ? ORDER BY started_at DESC LIMIT ?')
     .all(siteId, limit) as IncidentDbRow[]
   return rows.map(mapIncident)
+}
+
+export function getIncidentStats(siteId: number, hours: number): CompareIncidentStats {
+  const rows = getDb()
+    .prepare(`SELECT * FROM incidents WHERE site_id = ? AND started_at >= datetime('now', ?)`)
+    .all(siteId, `-${hours} hours`) as IncidentDbRow[]
+  const totalDownSeconds = rows.reduce((sum, r) => sum + mapIncident(r).durationSeconds!, 0)
+  return { count: rows.length, totalDownSeconds }
 }
 
 // ---------- maintenance windows ----------

@@ -10,6 +10,9 @@
           Site Uptime
         </NuxtLink>
         <nav class="ml-4 flex items-center gap-4 text-sm text-slate-400">
+          <NuxtLink to="/compare" class="hover:text-slate-200" active-class="text-slate-100">
+            Compare
+          </NuxtLink>
           <NuxtLink to="/notifications" class="hover:text-slate-200" active-class="text-slate-100">
             Notifications
           </NuxtLink>

@@ -52,6 +52,7 @@ export const chartColors = {
   amber: '#fbbf24', // amber-400
   rose: '#fb7185', // rose-400
   slate: '#475569', // slate-600
+  violet: '#a78bfa', // violet-400 — 6th series color, used for multi-site comparisons
   tooltipBg: 'rgba(15, 23, 42, 0.95)', // slate-900/95
   tooltipBorder: '#334155', // slate-700
 }

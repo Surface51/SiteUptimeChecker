@@ -115,6 +115,39 @@ export interface DailyUptime {
   total: number
 }
 
+export interface ComparePhaseAverages {
+  dns: number | null
+  tcp: number | null
+  tls: number | null
+  ttfb: number | null
+}
+
+export interface CompareIncidentStats {
+  count: number
+  totalDownSeconds: number
+}
+
+export interface CompareLighthouseScores {
+  performance: number | null
+  accessibility: number | null
+  bestPractices: number | null
+  seo: number | null
+}
+
+export interface CompareRow {
+  site: { id: number; name: string | null; url: string }
+  uptime24h: number | null
+  uptime7d: number | null
+  uptime30d: number | null
+  avgMs: number | null
+  p95Ms: number | null
+  phases: ComparePhaseAverages
+  incidents: CompareIncidentStats
+  sslDaysRemaining: number | null
+  lighthouse: CompareLighthouseScores
+  series: HistoryPoint[]
+}
+
 export type NotificationType = 'down' | 'up' | 'degraded' | 'ssl_expiring' | 'lighthouse_regression'
 
 export type LighthouseFormFactor = 'mobile' | 'desktop'

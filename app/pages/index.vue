@@ -95,11 +95,11 @@ const sortedCardSites = computed(() => {
     <template v-else>
       <SummaryBar :sites="sites" />
 
-      <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <FleetStatusDonut :sites="sites" />
-        <UptimeRankingBar class="lg:col-span-1" :sites="sites" />
-        <SslExpiryBar class="lg:col-span-1" :sites="sites" />
-      </div>
+      <!-- <div class="grid grid-cols-1 gap-4 lg:grid-cols-3"> -->
+      <!--   <FleetStatusDonut :sites="sites" /> -->
+      <!--   <UptimeRankingBar class="lg:col-span-1" :sites="sites" /> -->
+      <!--   <SslExpiryBar class="lg:col-span-1" :sites="sites" /> -->
+      <!-- </div> -->
 
       <div class="flex flex-wrap items-center gap-2">
         <button
