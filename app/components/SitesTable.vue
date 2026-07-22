@@ -18,6 +18,17 @@ type SortKey =
 const sortKey = ref<SortKey>('status')
 const sortDir = ref<'asc' | 'desc'>('asc')
 const checkingId = ref<number | null>(null)
+const runningLighthouseId = ref<number | null>(null)
+const openMenuId = ref<number | null>(null)
+
+const { ping: pingLighthouseProgress } = useLighthouseProgress()
+
+function toggleMenu(siteId: number) {
+  openMenuId.value = openMenuId.value === siteId ? null : siteId
+}
+function closeMenu() {
+  openMenuId.value = null
+}
 
 function setSort(key: SortKey) {
   if (sortKey.value === key) {
@@ -133,18 +144,33 @@ function formatRelative(iso: string | undefined | null) {
 }
 
 async function remove(site: SiteSummary) {
+  closeMenu()
   if (!confirm(`Remove ${site.name || hostnameOf(site.url)}?`)) return
   await $fetch(`/api/sites/${site.id}`, { method: 'DELETE' })
   emit('removed')
 }
 
 async function checkNow(site: SiteSummary) {
+  closeMenu()
   checkingId.value = site.id
   try {
     await $fetch(`/api/sites/${site.id}/check`, { method: 'POST' })
     emit('checked')
   } finally {
     checkingId.value = null
+  }
+}
+
+async function runLighthouseNow(site: SiteSummary) {
+  closeMenu()
+  runningLighthouseId.value = site.id
+  pingLighthouseProgress()
+  try {
+    // Omitting formFactor runs both mobile and desktop in one call (serialized server-side).
+    await $fetch(`/api/sites/${site.id}/lighthouse`, { method: 'POST' })
+    emit('checked')
+  } finally {
+    runningLighthouseId.value = null
   }
 }
 </script>
@@ -214,22 +240,46 @@ async function checkNow(site: SiteSummary) {
           </td>
           <td class="px-4 py-2.5 text-right text-slate-500">{{ formatRelative(site.latestCheck?.checkedAt) }}</td>
           <td class="px-4 py-2.5 text-right">
-            <div class="flex justify-end gap-1.5">
+            <div class="relative inline-block text-left" @click.stop>
               <button
                 type="button"
-                :disabled="checkingId === site.id"
-                class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
-                @click.stop="checkNow(site)"
+                class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                @click="toggleMenu(site.id)"
               >
-                {{ checkingId === site.id ? 'Checking…' : 'Check now' }}
+                Actions ▾
               </button>
-              <button
-                type="button"
-                class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-rose-950/60 hover:text-rose-300"
-                @click.stop="remove(site)"
+
+              <div v-if="openMenuId === site.id" class="fixed inset-0 z-10" @click="closeMenu" />
+
+              <div
+                v-if="openMenuId === site.id"
+                class="absolute right-0 z-20 mt-1 w-44 rounded-md border border-slate-800 bg-slate-900 py-1 shadow-xl"
               >
-                Remove
-              </button>
+                <button
+                  type="button"
+                  :disabled="checkingId === site.id"
+                  class="block w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                  @click="checkNow(site)"
+                >
+                  {{ checkingId === site.id ? 'Checking…' : 'Check now' }}
+                </button>
+                <button
+                  type="button"
+                  :disabled="runningLighthouseId === site.id"
+                  class="block w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                  @click="runLighthouseNow(site)"
+                >
+                  {{ runningLighthouseId === site.id ? 'Running…' : 'Run Lighthouse now' }}
+                </button>
+                <div class="my-1 border-t border-slate-800" />
+                <button
+                  type="button"
+                  class="block w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-rose-950/60 hover:text-rose-300"
+                  @click="remove(site)"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           </td>
         </tr>
