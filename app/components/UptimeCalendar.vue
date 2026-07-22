@@ -36,8 +36,8 @@ const option = computed<EChartsOption>(() => ({
     yearLabel: { show: false },
     dayLabel: { color: chartColors.text, fontSize: 10, nameMap: 'en' },
     monthLabel: { color: chartColors.text, fontSize: 10 },
-    splitLine: { lineStyle: { color: chartColors.axisLine, width: 1 } },
-    itemStyle: { borderColor: '#0f172a', borderWidth: 3, color: 'rgba(30,41,59,0.6)' },
+    splitLine: { lineStyle: { color: chartColors.slate, width: 2 } },
+    itemStyle: { borderColor: '#0f172a', borderWidth: 4, color: 'rgba(30,41,59,0.6)' },
   },
   series: {
     type: 'heatmap',
