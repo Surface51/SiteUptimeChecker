@@ -5,6 +5,7 @@ import type {
   IncidentRow,
   LighthouseFormFactor,
   LighthouseReport,
+  MaintenanceWindowRow,
   NotificationRow,
   SiteSummary,
 } from '#shared/types'
@@ -29,6 +30,11 @@ const { data: siteNotifications, refresh: refreshNotifications } = await useFetc
 
 const { data: dailyUptime } = await useFetch<DailyUptime[]>(
   () => `/api/sites/${id.value}/daily`,
+  { query: { days: 90 }, default: () => [] },
+)
+
+const { data: maintenanceWindows, refresh: refreshMaintenance } = await useFetch<MaintenanceWindowRow[]>(
+  () => `/api/sites/${id.value}/maintenance`,
   { default: () => [] },
 )
 
@@ -79,6 +85,7 @@ onMounted(() => {
     refreshIncidents()
     refreshLighthouse()
     refreshNotifications()
+    refreshMaintenance()
   }, 30_000)
 })
 onUnmounted(() => {
@@ -336,18 +343,8 @@ async function removeSite() {
     </div>
 
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-        <div class="text-xs text-slate-500">Uptime (24h)</div>
-        <div class="mt-1 text-2xl font-semibold text-slate-100">
-          {{ site.uptime24h === null ? '—' : `${site.uptime24h.toFixed(1)}%` }}
-        </div>
-      </div>
-      <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-        <div class="text-xs text-slate-500">Uptime (7d)</div>
-        <div class="mt-1 text-2xl font-semibold text-slate-100">
-          {{ site.uptime7d === null ? '—' : `${site.uptime7d.toFixed(1)}%` }}
-        </div>
-      </div>
+      <UptimeGauge label="Uptime (24h)" :value="site.uptime24h" />
+      <UptimeGauge label="Uptime (7d)" :value="site.uptime7d" />
       <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
         <div class="text-xs text-slate-500">Avg / p95 response</div>
         <div class="mt-1 text-2xl font-semibold text-slate-100">
@@ -374,8 +371,8 @@ async function removeSite() {
     </div>
 
     <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-      <h2 class="mb-3 text-sm font-medium text-slate-200">Daily uptime (30d)</h2>
-      <UptimeHeatmap :days="dailyUptime ?? []" />
+      <h2 class="mb-3 text-sm font-medium text-slate-200">Daily uptime (90d)</h2>
+      <UptimeCalendar :days="dailyUptime ?? []" />
     </div>
 
     <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
@@ -394,7 +391,12 @@ async function removeSite() {
           </button>
         </div>
       </div>
-      <HistoryChart :points="history ?? []" />
+      <ResponseTimeChart
+        :points="history ?? []"
+        :degraded-ms="site.degradedMs"
+        :incidents="incidents ?? []"
+        :maintenance-windows="maintenanceWindows ?? []"
+      />
     </div>
 
     <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
@@ -407,11 +409,16 @@ async function removeSite() {
         @ran="() => { refreshLighthouse(); refreshNotifications() }"
       />
       <div class="mt-4">
-        <LighthouseChart :points="lighthouseHistory ?? []" />
+        <LighthousePerfChart :points="lighthouseHistory ?? []" />
       </div>
     </div>
 
     <SiteNotifications :notifications="siteNotifications ?? []" />
+
+    <div v-if="(incidents ?? []).some((i) => i.endedAt !== null)" class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+      <h2 class="mb-3 text-sm font-medium text-slate-200">Incident duration (MTTR trend)</h2>
+      <IncidentDurationBar :incidents="incidents ?? []" />
+    </div>
 
     <IncidentList :incidents="incidents ?? []" />
 

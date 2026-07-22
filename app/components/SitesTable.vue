@@ -121,7 +121,7 @@ const columns: { key: SortKey; label: string; align?: 'right' }[] = [
 ]
 
 function formatPct(v: number | null) {
-  return v === null ? '—' : `${v.toFixed(1)}%`
+  return v === null ? '—' : `${v.toFixed(2)}%`
 }
 function formatMs(v: number | null | undefined) {
   return v == null ? '—' : `${Math.round(v)} ms`

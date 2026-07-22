@@ -25,7 +25,7 @@ const TILES: TileConfig[] = [
   { key: 'fcp', label: 'FCP', isScore: false, higherIsBetter: false, format: (v) => `${(v / 1000).toFixed(2)}s` },
   { key: 'lcp', label: 'LCP', isScore: false, higherIsBetter: false, format: (v) => `${(v / 1000).toFixed(2)}s` },
   { key: 'tbt', label: 'TBT', isScore: false, higherIsBetter: false, format: (v) => `${Math.round(v)}ms` },
-  { key: 'cls', label: 'CLS', isScore: false, higherIsBetter: false, format: (v) => v.toFixed(3) },
+  { key: 'cls', label: 'CLS', isScore: false, higherIsBetter: false, format: (v) => v.toFixed(2) },
   { key: 'speedIndex', label: 'Speed Index', isScore: false, higherIsBetter: false, format: (v) => `${(v / 1000).toFixed(2)}s` },
   { key: 'tti', label: 'TTI', isScore: false, higherIsBetter: false, format: (v) => `${(v / 1000).toFixed(2)}s` },
 ]

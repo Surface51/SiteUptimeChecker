@@ -87,6 +87,9 @@ export interface HistoryPoint {
   httpStatus: number | null
   timeTotal: number | null
   timeTtfb: number | null
+  timeDns: number | null
+  timeTcp: number | null
+  timeTls: number | null
 }
 
 export interface IncidentRow {

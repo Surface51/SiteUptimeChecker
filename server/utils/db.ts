@@ -427,7 +427,7 @@ export function getSparkline(siteId: number, limit = 30): number[] {
 export function getHistory(siteId: number, hours: number, limit: number) {
   const rows = getDb()
     .prepare(
-      `SELECT checked_at, status, http_status, time_total, time_ttfb FROM checks
+      `SELECT checked_at, status, http_status, time_total, time_ttfb, time_dns, time_tcp, time_tls FROM checks
        WHERE site_id = ? AND checked_at >= datetime('now', ?)
        ORDER BY checked_at ASC LIMIT ?`,
     )
@@ -437,6 +437,9 @@ export function getHistory(siteId: number, hours: number, limit: number) {
     http_status: number | null
     time_total: number | null
     time_ttfb: number | null
+    time_dns: number | null
+    time_tcp: number | null
+    time_tls: number | null
   }[]
 
   return rows.map((r) => ({
@@ -445,6 +448,9 @@ export function getHistory(siteId: number, hours: number, limit: number) {
     httpStatus: r.http_status,
     timeTotal: r.time_total,
     timeTtfb: r.time_ttfb,
+    timeDns: r.time_dns,
+    timeTcp: r.time_tcp,
+    timeTls: r.time_tls,
   }))
 }
 

@@ -15,7 +15,7 @@ const hostname = computed(() => {
 })
 
 const uptimeLabel = computed(() =>
-  props.site.uptime24h === null ? '—' : `${props.site.uptime24h.toFixed(1)}%`,
+  props.site.uptime24h === null ? '—' : `${props.site.uptime24h.toFixed(2)}%`,
 )
 
 const responseLabel = computed(() => {

@@ -36,7 +36,7 @@ const overallUptime = computed(() => {
     <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
       <div class="text-xs text-slate-500">Avg uptime (24h)</div>
       <div class="mt-1 text-xl font-semibold text-slate-100">
-        {{ overallUptime === null ? '—' : `${overallUptime.toFixed(1)}%` }}
+        {{ overallUptime === null ? '—' : `${overallUptime.toFixed(2)}%` }}
       </div>
     </div>
     <div v-if="pausedCount" class="col-span-2 text-xs text-slate-500 sm:col-span-5">{{ pausedCount }} paused</div>
