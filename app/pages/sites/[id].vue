@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
   DailyUptime,
+  DnsRecordSet,
   HistoryPoint,
   IncidentRow,
   LighthouseFormFactor,
@@ -8,6 +9,7 @@ import type {
   MaintenanceWindowRow,
   NotificationRow,
   SiteSummary,
+  WhoisRecord,
 } from '#shared/types'
 
 const route = useRoute()
@@ -63,6 +65,16 @@ const { data: lighthouseHistory, refresh: refreshLighthouse } = await useFetch<L
   { query: computed(() => ({ formFactor: lhFormFactor.value, days: 30 })), default: () => [] },
 )
 
+const { data: whoisHistory, refresh: refreshWhois } = await useFetch<WhoisRecord[]>(
+  () => `/api/sites/${id.value}/whois`,
+  { default: () => [] },
+)
+
+const { data: dnsHistory, refresh: refreshDns } = await useFetch<DnsRecordSet[]>(
+  () => `/api/sites/${id.value}/dns`,
+  { default: () => [] },
+)
+
 const avgResponseMs = computed(() => {
   const values = (history.value ?? []).map((p) => p.timeTotal).filter((v): v is number => v !== null)
   if (!values.length) return null
@@ -88,6 +100,8 @@ onMounted(() => {
     refreshLighthouse()
     refreshNotifications()
     refreshMaintenance()
+    refreshWhois()
+    refreshDns()
   }, 30_000)
 })
 onUnmounted(() => {
@@ -420,6 +434,16 @@ async function removeSite() {
       <div class="mt-4">
         <LighthousePerfChart :points="lighthouseHistory ?? []" />
       </div>
+    </div>
+
+    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+      <h2 class="mb-3 text-sm font-medium text-slate-200">WHOIS</h2>
+      <WhoisPanel :site-id="id" :history="whoisHistory ?? []" @ran="refreshWhois" />
+    </div>
+
+    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+      <h2 class="mb-3 text-sm font-medium text-slate-200">DNS records</h2>
+      <DnsRecordsPanel :site-id="id" :history="dnsHistory ?? []" @ran="refreshDns" />
     </div>
 
     <SiteNotifications :notifications="siteNotifications ?? []" />

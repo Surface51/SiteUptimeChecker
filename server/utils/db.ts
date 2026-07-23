@@ -9,6 +9,7 @@ import type {
   CompareRow,
   DailyUptime,
   DnsRecords,
+  DnsRecordSet,
   IncidentRow,
   LighthouseFormFactor,
   LighthouseReport,
@@ -20,6 +21,7 @@ import type {
   Site,
   SiteSummary,
   StatusTick,
+  WhoisRecord,
 } from '#shared/types'
 
 const DATA_DIR = process.env.UPTIME_DATA_DIR ?? join(process.cwd(), '.data')
@@ -139,6 +141,40 @@ export function getDb(): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_lh_site_time ON lighthouse_reports(site_id, form_factor, measured_at DESC);
+
+    CREATE TABLE IF NOT EXISTS whois_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      checked_at TEXT NOT NULL DEFAULT (datetime('now')),
+      registrar TEXT,
+      created_date TEXT,
+      updated_date TEXT,
+      expiry_date TEXT,
+      name_servers TEXT,
+      statuses TEXT,
+      raw TEXT,
+      error TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_whois_site_time ON whois_records(site_id, checked_at DESC);
+
+    CREATE TABLE IF NOT EXISTS dns_record_sets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      checked_at TEXT NOT NULL DEFAULT (datetime('now')),
+      a TEXT,
+      aaaa TEXT,
+      ns TEXT,
+      mx TEXT,
+      txt TEXT,
+      cname TEXT,
+      soa TEXT,
+      caa TEXT,
+      resolve_ms REAL,
+      error TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_dns_records_site_time ON dns_record_sets(site_id, checked_at DESC);
 
     CREATE TABLE IF NOT EXISTS tags (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -904,6 +940,198 @@ export function getLighthouseHistory(
     )
     .all(siteId, formFactor, `-${days} days`, limit) as LighthouseDbRow[]
   return rows.map(mapLighthouseReport)
+}
+
+// ---------- whois records ----------
+
+interface WhoisDbRow {
+  id: number
+  site_id: number
+  checked_at: string
+  registrar: string | null
+  created_date: string | null
+  updated_date: string | null
+  expiry_date: string | null
+  name_servers: string | null
+  statuses: string | null
+  raw: string | null
+  error: string | null
+}
+
+function mapWhoisRecord(row: WhoisDbRow): WhoisRecord {
+  return {
+    id: row.id,
+    siteId: row.site_id,
+    checkedAt: row.checked_at,
+    registrar: row.registrar,
+    createdDate: row.created_date,
+    updatedDate: row.updated_date,
+    expiryDate: row.expiry_date,
+    nameServers: row.name_servers ? (JSON.parse(row.name_servers) as string[]) : [],
+    statuses: row.statuses ? (JSON.parse(row.statuses) as string[]) : [],
+    raw: row.raw,
+    error: row.error,
+  }
+}
+
+export interface InsertWhoisRecordInput {
+  siteId: number
+  registrar: string | null
+  createdDate: string | null
+  updatedDate: string | null
+  expiryDate: string | null
+  nameServers: string[]
+  statuses: string[]
+  raw: string | null
+  error: string | null
+}
+
+export function insertWhoisRecord(input: InsertWhoisRecordInput): WhoisRecord {
+  const result = getDb()
+    .prepare(
+      `INSERT INTO whois_records (
+        site_id, registrar, created_date, updated_date, expiry_date, name_servers, statuses, raw, error
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      input.siteId,
+      input.registrar,
+      input.createdDate,
+      input.updatedDate,
+      input.expiryDate,
+      JSON.stringify(input.nameServers),
+      JSON.stringify(input.statuses),
+      input.raw,
+      input.error,
+    )
+
+  getDb()
+    .prepare(`DELETE FROM whois_records WHERE site_id = ? AND checked_at < datetime('now', '-730 days')`)
+    .run(input.siteId)
+
+  const row = getDb().prepare('SELECT * FROM whois_records WHERE id = ?').get(result.lastInsertRowid) as WhoisDbRow
+  return mapWhoisRecord(row)
+}
+
+export function getLatestWhoisRecord(siteId: number): WhoisRecord | null {
+  const row = getDb()
+    .prepare('SELECT * FROM whois_records WHERE site_id = ? ORDER BY checked_at DESC LIMIT 1')
+    .get(siteId) as WhoisDbRow | undefined
+  return row ? mapWhoisRecord(row) : null
+}
+
+export function getWhoisHistory(siteId: number, days: number, limit: number): WhoisRecord[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM whois_records
+       WHERE site_id = ? AND checked_at >= datetime('now', ?)
+       ORDER BY checked_at ASC LIMIT ?`,
+    )
+    .all(siteId, `-${days} days`, limit) as WhoisDbRow[]
+  return rows.map(mapWhoisRecord)
+}
+
+// ---------- dns record sets ----------
+
+interface DnsRecordSetDbRow {
+  id: number
+  site_id: number
+  checked_at: string
+  a: string | null
+  aaaa: string | null
+  ns: string | null
+  mx: string | null
+  txt: string | null
+  cname: string | null
+  soa: string | null
+  caa: string | null
+  resolve_ms: number | null
+  error: string | null
+}
+
+function parseStringArray(value: string | null): string[] {
+  return value ? (JSON.parse(value) as string[]) : []
+}
+
+function mapDnsRecordSet(row: DnsRecordSetDbRow): DnsRecordSet {
+  return {
+    id: row.id,
+    siteId: row.site_id,
+    checkedAt: row.checked_at,
+    a: parseStringArray(row.a),
+    aaaa: parseStringArray(row.aaaa),
+    ns: parseStringArray(row.ns),
+    mx: parseStringArray(row.mx),
+    txt: parseStringArray(row.txt),
+    cname: parseStringArray(row.cname),
+    soa: parseStringArray(row.soa),
+    caa: parseStringArray(row.caa),
+    resolveMs: row.resolve_ms,
+    error: row.error,
+  }
+}
+
+export interface InsertDnsRecordSetInput {
+  siteId: number
+  a: string[]
+  aaaa: string[]
+  ns: string[]
+  mx: string[]
+  txt: string[]
+  cname: string[]
+  soa: string[]
+  caa: string[]
+  resolveMs: number | null
+  error: string | null
+}
+
+export function insertDnsRecordSet(input: InsertDnsRecordSetInput): DnsRecordSet {
+  const result = getDb()
+    .prepare(
+      `INSERT INTO dns_record_sets (
+        site_id, a, aaaa, ns, mx, txt, cname, soa, caa, resolve_ms, error
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      input.siteId,
+      JSON.stringify(input.a),
+      JSON.stringify(input.aaaa),
+      JSON.stringify(input.ns),
+      JSON.stringify(input.mx),
+      JSON.stringify(input.txt),
+      JSON.stringify(input.cname),
+      JSON.stringify(input.soa),
+      JSON.stringify(input.caa),
+      input.resolveMs,
+      input.error,
+    )
+
+  getDb()
+    .prepare(`DELETE FROM dns_record_sets WHERE site_id = ? AND checked_at < datetime('now', '-730 days')`)
+    .run(input.siteId)
+
+  const row = getDb()
+    .prepare('SELECT * FROM dns_record_sets WHERE id = ?')
+    .get(result.lastInsertRowid) as DnsRecordSetDbRow
+  return mapDnsRecordSet(row)
+}
+
+export function getLatestDnsRecordSet(siteId: number): DnsRecordSet | null {
+  const row = getDb()
+    .prepare('SELECT * FROM dns_record_sets WHERE site_id = ? ORDER BY checked_at DESC LIMIT 1')
+    .get(siteId) as DnsRecordSetDbRow | undefined
+  return row ? mapDnsRecordSet(row) : null
+}
+
+export function getDnsHistory(siteId: number, days: number, limit: number): DnsRecordSet[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM dns_record_sets
+       WHERE site_id = ? AND checked_at >= datetime('now', ?)
+       ORDER BY checked_at ASC LIMIT ?`,
+    )
+    .all(siteId, `-${days} days`, limit) as DnsRecordSetDbRow[]
+  return rows.map(mapDnsRecordSet)
 }
 
 // ---------- notifications ----------

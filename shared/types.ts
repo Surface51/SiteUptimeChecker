@@ -23,6 +23,37 @@ export interface DnsRecords {
   error: string | null
 }
 
+export interface WhoisRecord {
+  id: number
+  siteId: number
+  checkedAt: string
+  registrar: string | null
+  createdDate: string | null
+  updatedDate: string | null
+  expiryDate: string | null
+  nameServers: string[]
+  statuses: string[]
+  raw: string | null
+  error: string | null
+}
+
+/** Fuller weekly DNS snapshot (NS/MX/TXT/CNAME/SOA/CAA), distinct from the per-check `DnsRecords` above. */
+export interface DnsRecordSet {
+  id: number
+  siteId: number
+  checkedAt: string
+  a: string[]
+  aaaa: string[]
+  ns: string[]
+  mx: string[]
+  txt: string[]
+  cname: string[]
+  soa: string[]
+  caa: string[]
+  resolveMs: number | null
+  error: string | null
+}
+
 export interface Site {
   id: number
   url: string
