@@ -39,7 +39,7 @@ const { data: notifications, refresh, pending } = useFetch<NotificationRow[]>('/
 async function onNotificationClick(n: NotificationRow) {
   if (!n.read) {
     await $fetch(`/api/notifications/${n.id}/read`, { method: 'POST' })
-    n.read = true
+    notifications.value = (notifications.value ?? []).map((row) => (row.id === n.id ? { ...row, read: true } : row))
   }
   await navigateTo(`/sites/${n.siteId}`)
 }

@@ -13,6 +13,16 @@ const FORM_FACTORS: LighthouseFormFactor[] = ['mobile', 'desktop']
 let lighthouseQueue: Promise<void> = Promise.resolve()
 let warnedFailure = false
 
+// Tracks non-forced runs that are queued/running, keyed by `${siteId}:${formFactor}`, so a
+// second non-forced request for the same site/form-factor before the first completes reuses
+// the in-flight run instead of stacking a duplicate (the day-level DB check alone can't see
+// work that hasn't been persisted yet).
+const inFlightRuns = new Map<string, Promise<LighthouseReport>>()
+
+function inFlightKey(siteId: number, formFactor: LighthouseFormFactor): string {
+  return `${siteId}:${formFactor}`
+}
+
 // ---------- in-memory job/progress tracking ----------
 // Not persisted — this is best-effort UI feedback for the current server process, not an
 // audit log. Runs are already serialized through `lighthouseQueue`, so "active" is at most
@@ -67,7 +77,23 @@ export function getLighthouseProgress(): { active: LighthouseJob[]; recent: Ligh
   return { active, recent }
 }
 
-export function enqueueLighthouse(site: Site, formFactor: LighthouseFormFactor): Promise<LighthouseReport> {
+export function enqueueLighthouse(
+  site: Site,
+  formFactor: LighthouseFormFactor,
+  opts: { force?: boolean } = {},
+): Promise<LighthouseReport> {
+  const key = inFlightKey(site.id, formFactor)
+
+  if (!opts.force) {
+    const pending = inFlightRuns.get(key)
+    if (pending) return pending
+
+    if (hasReportToday(site.id, formFactor)) {
+      const latest = getLatestLighthouseReport(site.id, formFactor)
+      if (latest) return Promise.resolve(latest)
+    }
+  }
+
   const job = createJob(site, formFactor)
   const task = lighthouseQueue.then(() => runLighthouseNow(site, formFactor, job.id))
   lighthouseQueue = task.then(
@@ -81,6 +107,14 @@ export function enqueueLighthouse(site: Site, formFactor: LighthouseFormFactor):
       }
     },
   )
+
+  if (!opts.force) {
+    inFlightRuns.set(key, task)
+    task.finally(() => {
+      if (inFlightRuns.get(key) === task) inFlightRuns.delete(key)
+    })
+  }
+
   return task
 }
 
@@ -189,13 +223,18 @@ function checkRegression(
   }
 }
 
-/** Enqueues both form factors for every enabled site. Returns how many jobs were queued. */
-export function enqueueLighthouseForAllSites(): number {
+/**
+ * Enqueues both form factors for every enabled site, skipping any site/form-factor that
+ * already has a report within the last 24h (unless `force`). Returns how many jobs were
+ * actually queued (skipped ones don't count).
+ */
+export function enqueueLighthouseForAllSites(opts: { force?: boolean } = {}): number {
   let queued = 0
   for (const site of listSites()) {
     if (!site.enabled) continue
     for (const formFactor of FORM_FACTORS) {
-      enqueueLighthouse(site, formFactor)
+      if (!opts.force && hasReportToday(site.id, formFactor)) continue
+      enqueueLighthouse(site, formFactor, opts)
       queued++
     }
   }
@@ -214,9 +253,7 @@ let dailyTimer: NodeJS.Timeout | null = null
 export function startLighthouseScheduler() {
   for (const site of listSites()) {
     if (!site.enabled) continue
-    for (const formFactor of FORM_FACTORS) {
-      if (!hasReportToday(site.id, formFactor)) enqueueLighthouse(site, formFactor)
-    }
+    for (const formFactor of FORM_FACTORS) enqueueLighthouse(site, formFactor)
   }
 
   dailyTimer = setInterval(() => {

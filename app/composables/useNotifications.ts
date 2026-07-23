@@ -67,13 +67,12 @@ export function useNotifications() {
 
   async function markRead(id: number) {
     await $fetch(`/api/notifications/${id}/read`, { method: 'POST' })
-    const item = (data.value ?? []).find((n) => n.id === id)
-    if (item) item.read = true
+    data.value = (data.value ?? []).map((n) => (n.id === id ? { ...n, read: true } : n))
   }
 
   async function markAllRead() {
     await $fetch('/api/notifications/read-all', { method: 'POST' })
-    for (const n of data.value ?? []) n.read = true
+    data.value = (data.value ?? []).map((n) => ({ ...n, read: true }))
   }
 
   async function dismissAll() {

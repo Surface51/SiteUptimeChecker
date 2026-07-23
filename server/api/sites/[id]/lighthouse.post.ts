@@ -14,10 +14,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const query = getQuery(event)
+  const force = query.force === 'true' || query.force === '1'
+
   if (query.formFactor === 'mobile' || query.formFactor === 'desktop') {
-    return enqueueLighthouse(site, query.formFactor)
+    return enqueueLighthouse(site, query.formFactor, { force })
   }
 
   const formFactors: LighthouseFormFactor[] = ['mobile', 'desktop']
-  return Promise.all(formFactors.map((formFactor) => enqueueLighthouse(site, formFactor)))
+  return Promise.all(formFactors.map((formFactor) => enqueueLighthouse(site, formFactor, { force })))
 })
