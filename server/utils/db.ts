@@ -139,6 +139,19 @@ export function getDb(): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_lh_site_time ON lighthouse_reports(site_id, form_factor, measured_at DESC);
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE COLLATE NOCASE
+    );
+
+    CREATE TABLE IF NOT EXISTS site_tags (
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      PRIMARY KEY (site_id, tag_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_site_tags_tag ON site_tags(tag_id);
   `)
 
   migrate(db)
@@ -195,6 +208,7 @@ function mapSite(row: SiteRow): Site {
     screenshotUpdatedAt: row.screenshot_updated_at,
     degradedMs: row.degraded_ms,
     expectedStatus: row.expected_status,
+    tags: getTagsForSite(row.id),
   }
 }
 
@@ -329,7 +343,63 @@ export function touchSiteScreenshot(id: number) {
 }
 
 export function deleteSite(id: number) {
-  getDb().prepare('DELETE FROM sites WHERE id = ?').run(id)
+  const db = getDb()
+  db.prepare('DELETE FROM sites WHERE id = ?').run(id)
+  // The site_tags rows cascade away with the site; sweep any tags that were only used here.
+  db.prepare('DELETE FROM tags WHERE NOT EXISTS (SELECT 1 FROM site_tags WHERE tag_id = tags.id)').run()
+}
+
+// ---------- tags queries ----------
+
+export function getTagsForSite(siteId: number): string[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT t.name AS name FROM tags t
+       JOIN site_tags st ON st.tag_id = t.id
+       WHERE st.site_id = ?
+       ORDER BY t.name COLLATE NOCASE ASC`,
+    )
+    .all(siteId) as { name: string }[]
+  return rows.map((r) => r.name)
+}
+
+export function listAllTagNames(): string[] {
+  const rows = getDb()
+    .prepare('SELECT name FROM tags ORDER BY name COLLATE NOCASE ASC')
+    .all() as { name: string }[]
+  return rows.map((r) => r.name)
+}
+
+/** Looks up a tag case-insensitively, reusing the stored casing if it already exists. */
+function findOrCreateTag(db: Database.Database, name: string): number {
+  const existing = db.prepare('SELECT id FROM tags WHERE name = ? COLLATE NOCASE').get(name) as
+    | { id: number }
+    | undefined
+  if (existing) return existing.id
+  return db.prepare('INSERT INTO tags (name) VALUES (?)').run(name).lastInsertRowid as number
+}
+
+export function addSiteTag(siteId: number, name: string): string[] {
+  const db = getDb()
+  const tagId = findOrCreateTag(db, name)
+  db.prepare('INSERT OR IGNORE INTO site_tags (site_id, tag_id) VALUES (?, ?)').run(siteId, tagId)
+  return getTagsForSite(siteId)
+}
+
+export function removeSiteTag(siteId: number, name: string): string[] {
+  const db = getDb()
+  const tag = db.prepare('SELECT id FROM tags WHERE name = ? COLLATE NOCASE').get(name) as
+    | { id: number }
+    | undefined
+  if (tag) {
+    db.prepare('DELETE FROM site_tags WHERE site_id = ? AND tag_id = ?').run(siteId, tag.id)
+    // Drop tags no longer referenced by any site so the global tag list stays tidy.
+    db.prepare('DELETE FROM tags WHERE id = ? AND NOT EXISTS (SELECT 1 FROM site_tags WHERE tag_id = ?)').run(
+      tag.id,
+      tag.id,
+    )
+  }
+  return getTagsForSite(siteId)
 }
 
 // ---------- checks queries ----------

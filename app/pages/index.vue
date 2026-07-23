@@ -62,8 +62,34 @@ function statusRank(status: CheckStatus | null | undefined): number {
   }
 }
 
+const allTags = computed(() => {
+  const names = new Set<string>()
+  for (const site of sites.value) {
+    for (const tag of site.tags) names.add(tag)
+  }
+  return [...names].sort((a, b) => a.localeCompare(b))
+})
+
+const selectedTags = ref<string[]>([])
+
+function toggleFilterTag(tag: string) {
+  const idx = selectedTags.value.findIndex((t) => t.toLowerCase() === tag.toLowerCase())
+  if (idx === -1) {
+    selectedTags.value = [...selectedTags.value, tag]
+  } else {
+    selectedTags.value = selectedTags.value.filter((_, i) => i !== idx)
+  }
+}
+
+// Sites matching ANY selected tag — narrows the fleet without needing every tag present.
+const filteredSites = computed(() => {
+  if (!selectedTags.value.length) return sites.value
+  const wanted = new Set(selectedTags.value.map((t) => t.toLowerCase()))
+  return sites.value.filter((s) => s.tags.some((t) => wanted.has(t.toLowerCase())))
+})
+
 const sortedCardSites = computed(() => {
-  const list = [...sites.value]
+  const list = [...filteredSites.value]
   list.sort((a: SiteSummary, b: SiteSummary) => {
     switch (sortKey.value) {
       case 'uptime24h':
@@ -120,6 +146,32 @@ const sortedCardSites = computed(() => {
         </button>
       </div>
 
+      <div v-if="allTags.length" class="flex flex-wrap items-center gap-1.5">
+        <span class="text-xs text-slate-500">Filter:</span>
+        <button
+          v-for="tag in allTags"
+          :key="tag"
+          type="button"
+          class="rounded-full px-2.5 py-1 text-xs font-medium transition-colors"
+          :class="
+            selectedTags.some((t) => t.toLowerCase() === tag.toLowerCase())
+              ? 'bg-emerald-900/50 text-emerald-300'
+              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+          "
+          @click="toggleFilterTag(tag)"
+        >
+          {{ tag }}
+        </button>
+        <button
+          v-if="selectedTags.length"
+          type="button"
+          class="rounded-full px-2.5 py-1 text-xs text-slate-500 hover:text-slate-300"
+          @click="selectedTags = []"
+        >
+          Clear
+        </button>
+      </div>
+
       <div class="flex items-center justify-between">
         <div v-if="viewMode === 'cards'" class="flex gap-1 rounded-md border border-slate-800 p-0.5 text-xs">
           <button
@@ -159,10 +211,21 @@ const sortedCardSites = computed(() => {
         </div>
       </div>
 
-      <div v-if="viewMode === 'cards'" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <SiteCard v-for="site in sortedCardSites" :key="site.id" :site="site" @removed="refresh" @checked="refresh" />
+      <div v-if="!sortedCardSites.length" class="rounded-xl border border-dashed border-slate-800 p-12 text-center text-slate-500">
+        No sites match the selected tags.
       </div>
-      <SitesTable v-else :sites="sites" @removed="refresh" @checked="refresh" />
+      <div v-else-if="viewMode === 'cards'" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <SiteCard
+          v-for="site in sortedCardSites"
+          :key="site.id"
+          :site="site"
+          :active-filter-tags="selectedTags"
+          @removed="refresh"
+          @checked="refresh"
+          @toggle-filter="toggleFilterTag"
+        />
+      </div>
+      <SitesTable v-else :sites="filteredSites" @removed="refresh" @checked="refresh" />
     </template>
   </div>
 </template>

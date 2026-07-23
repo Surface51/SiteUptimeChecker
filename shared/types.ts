@@ -33,6 +33,7 @@ export interface Site {
   screenshotUpdatedAt: string | null
   degradedMs: number
   expectedStatus: number | null
+  tags: string[]
 }
 
 export interface CheckRow {

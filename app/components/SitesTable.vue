@@ -205,6 +205,15 @@ async function runLighthouseNow(site: SiteSummary) {
           <td class="px-4 py-2.5">
             <div class="font-medium text-slate-100">{{ site.name || hostnameOf(site.url) }}</div>
             <div class="truncate text-xs text-slate-500">{{ hostnameOf(site.url) }}</div>
+            <div v-if="site.tags.length" class="mt-1 flex flex-wrap gap-1">
+              <span
+                v-for="tag in site.tags"
+                :key="tag"
+                class="rounded-full bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-400"
+              >
+                {{ tag }}
+              </span>
+            </div>
           </td>
           <td class="px-4 py-2.5">
             <StatusBadge :status="site.latestCheck?.status ?? null" />

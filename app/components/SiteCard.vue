@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { SiteSummary } from '#shared/types'
 
-const props = defineProps<{ site: SiteSummary }>()
-const emit = defineEmits<{ removed: [], checked: [] }>()
+const props = defineProps<{ site: SiteSummary; activeFilterTags?: string[] }>()
+const emit = defineEmits<{ removed: [], checked: [], 'toggle-filter': [tag: string] }>()
+
+const { tags: allTags } = useTags()
 
 const checking = ref(false)
 
@@ -110,6 +112,17 @@ async function togglePaused() {
         <div v-if="site.inMaintenance" class="mt-1.5 inline-flex items-center rounded-full bg-sky-900/40 px-2 py-0.5 text-[11px] font-medium text-sky-300">
           Maintenance
         </div>
+
+        <TagEditor
+          class="mt-1.5"
+          size="sm"
+          :site-id="site.id"
+          :tags="site.tags"
+          :suggestions="allTags"
+          :active-tags="activeFilterTags"
+          @changed="emit('checked')"
+          @toggle-filter="emit('toggle-filter', $event)"
+        />
 
         <div class="mt-3 flex items-center justify-between text-sm">
           <div>

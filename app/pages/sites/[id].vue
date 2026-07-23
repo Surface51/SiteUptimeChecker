@@ -40,6 +40,8 @@ const { data: maintenanceWindows, refresh: refreshMaintenance } = await useFetch
 
 useHead({ title: () => (site.value ? site.value.name || site.value.url : 'Site Uptime') })
 
+const { tags: allTags } = useTags()
+
 const hoursOptions = [
   { label: '6h', value: 6 },
   { label: '24h', value: 24 },
@@ -236,6 +238,13 @@ async function removeSite() {
           <p v-if="site.latestCheck?.pageTitle" class="mt-0.5 truncate text-xs text-slate-600">
             {{ site.latestCheck.pageTitle }}
           </p>
+          <TagEditor
+            class="mt-2"
+            :site-id="site.id"
+            :tags="site.tags"
+            :suggestions="allTags"
+            @changed="refreshSite"
+          />
         </div>
 
         <div class="flex shrink-0 items-center gap-2">
