@@ -248,23 +248,41 @@ function hasReportToday(siteId: number, formFactor: LighthouseFormFactor): boole
   return Date.now() - measuredAt.getTime() < DAY_MS
 }
 
+let midnightTimer: NodeJS.Timeout | null = null
 let dailyTimer: NodeJS.Timeout | null = null
 
-export function startLighthouseScheduler() {
+function enqueueAllSites() {
   for (const site of listSites()) {
     if (!site.enabled) continue
     for (const formFactor of FORM_FACTORS) enqueueLighthouse(site, formFactor)
   }
+}
 
-  dailyTimer = setInterval(() => {
-    for (const site of listSites()) {
-      if (!site.enabled) continue
-      for (const formFactor of FORM_FACTORS) enqueueLighthouse(site, formFactor)
-    }
-  }, DAY_MS)
+function msUntilNextMidnight(): number {
+  const now = new Date()
+  const next = new Date(now)
+  next.setHours(24, 0, 0, 0)
+  return next.getTime() - now.getTime()
+}
+
+/**
+ * Runs the full audit sweep once at the next local midnight, then every 24h after that — not
+ * immediately on startup. Auditing every site launches a real Chrome instance per site/form
+ * factor, so running it on every process start (e.g. every deploy) would otherwise pile
+ * unpredictable load onto the machine during the day; midnight keeps it off-hours.
+ */
+export function startLighthouseScheduler() {
+  midnightTimer = setTimeout(() => {
+    enqueueAllSites()
+    dailyTimer = setInterval(enqueueAllSites, DAY_MS)
+  }, msUntilNextMidnight())
 }
 
 export function stopLighthouseScheduler() {
+  if (midnightTimer) {
+    clearTimeout(midnightTimer)
+    midnightTimer = null
+  }
   if (dailyTimer) {
     clearInterval(dailyTimer)
     dailyTimer = null
