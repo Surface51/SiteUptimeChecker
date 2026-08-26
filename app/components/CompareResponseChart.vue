@@ -29,14 +29,20 @@ const option = computed<EChartsOption>(() => {
     trigger: 'axis',
     valueFormatter: (v: number | string | null) => (v === null || v === undefined ? '—' : `${Math.round(Number(v))} ms`),
   },
-  series: props.rows.map((row, i) => ({
-    name: row.site.name || hostname(row),
-    type: 'line',
-    showSymbol: false,
-    lineStyle: { width: 2 },
-    color: palette[i % palette.length],
-    data: row.series.map((p) => [parseDbTime(p.checkedAt), p.timeTotal]),
-  })),
+  series: props.rows.map((row, i) => {
+    // The registered chart theme sets a default lineStyle/itemStyle color for all
+    // line series — the top-level `color` shorthand loses to that default, so the
+    // color must be set explicitly on each style object to actually take effect.
+    const color = palette[i % palette.length]
+    return {
+      name: row.site.name || hostname(row),
+      type: 'line',
+      showSymbol: false,
+      lineStyle: { width: 2, color },
+      itemStyle: { color },
+      data: row.series.map((p) => [parseDbTime(p.checkedAt), p.timeTotal]),
+    }
+  }),
   }
 })
 </script>

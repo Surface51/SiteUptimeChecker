@@ -20,14 +20,31 @@ const sortDir = ref<'asc' | 'desc'>('asc')
 const checkingId = ref<number | null>(null)
 const runningLighthouseId = ref<number | null>(null)
 const openMenuId = ref<number | null>(null)
+const menuPos = ref<{ top: number; left: number } | null>(null)
 
 const { ping: pingLighthouseProgress } = useLighthouseProgress()
 
-function toggleMenu(siteId: number) {
-  openMenuId.value = openMenuId.value === siteId ? null : siteId
+onUnmounted(() => {
+  window.removeEventListener('scroll', closeMenu, { capture: true })
+  window.removeEventListener('resize', closeMenu)
+})
+
+function toggleMenu(siteId: number, event: MouseEvent) {
+  if (openMenuId.value === siteId) {
+    closeMenu()
+    return
+  }
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  menuPos.value = { top: rect.bottom + 6, left: rect.right - 192 }
+  openMenuId.value = siteId
+  window.addEventListener('scroll', closeMenu, { capture: true, passive: true })
+  window.addEventListener('resize', closeMenu, { passive: true })
 }
 function closeMenu() {
   openMenuId.value = null
+  menuPos.value = null
+  window.removeEventListener('scroll', closeMenu, { capture: true })
+  window.removeEventListener('resize', closeMenu)
 }
 
 function setSort(key: SortKey) {
@@ -256,42 +273,46 @@ async function runLighthouseNow(site: SiteSummary) {
               <button
                 type="button"
                 class="cursor-pointer rounded-full border border-border-default px-3 py-1 text-xs font-medium text-secondary transition-colors hover:bg-inverse hover:text-on-inverse"
-                @click="toggleMenu(site.id)"
+                @click="toggleMenu(site.id, $event)"
               >
                 Actions ▾
               </button>
 
-              <div v-if="openMenuId === site.id" class="fixed inset-0 z-10" @click="closeMenu" />
+              <Teleport to="body">
+                <div v-if="openMenuId === site.id" class="fixed inset-0 z-40" @click="closeMenu" />
 
-              <div
-                v-if="openMenuId === site.id"
-                class="absolute right-0 z-20 mt-1.5 w-48 overflow-hidden rounded-md border border-border-default bg-raised py-1"
-              >
-                <button
-                  type="button"
-                  :disabled="checkingId === site.id"
-                  class="block w-full cursor-pointer px-3.5 py-2 text-left text-xs text-secondary transition-colors hover:bg-sunken hover:text-primary disabled:opacity-50"
-                  @click="checkNow(site)"
+                <div
+                  v-if="openMenuId === site.id && menuPos"
+                  class="fixed z-50 w-48 overflow-hidden rounded-md border border-border-default bg-raised py-1 shadow-lg"
+                  :style="{ top: `${menuPos.top}px`, left: `${menuPos.left}px` }"
+                  @click.stop
                 >
-                  {{ checkingId === site.id ? 'Checking…' : 'Check now' }}
-                </button>
-                <button
-                  type="button"
-                  :disabled="runningLighthouseId === site.id"
-                  class="block w-full cursor-pointer px-3.5 py-2 text-left text-xs text-secondary transition-colors hover:bg-sunken hover:text-primary disabled:opacity-50"
-                  @click="runLighthouseNow(site)"
-                >
-                  {{ runningLighthouseId === site.id ? 'Running…' : 'Run Lighthouse now' }}
-                </button>
-                <div class="my-1 border-t border-border-default" />
-                <button
-                  type="button"
-                  class="block w-full cursor-pointer px-3.5 py-2 text-left text-xs text-down transition-colors hover:bg-down-tint"
-                  @click="remove(site)"
-                >
-                  Remove
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    :disabled="checkingId === site.id"
+                    class="block w-full cursor-pointer px-3.5 py-2 text-left text-xs text-secondary transition-colors hover:bg-sunken hover:text-primary disabled:opacity-50"
+                    @click="checkNow(site)"
+                  >
+                    {{ checkingId === site.id ? 'Checking…' : 'Check now' }}
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="runningLighthouseId === site.id"
+                    class="block w-full cursor-pointer px-3.5 py-2 text-left text-xs text-secondary transition-colors hover:bg-sunken hover:text-primary disabled:opacity-50"
+                    @click="runLighthouseNow(site)"
+                  >
+                    {{ runningLighthouseId === site.id ? 'Running…' : 'Run Lighthouse now' }}
+                  </button>
+                  <div class="my-1 border-t border-border-default" />
+                  <button
+                    type="button"
+                    class="block w-full cursor-pointer px-3.5 py-2 text-left text-xs text-down transition-colors hover:bg-down-tint"
+                    @click="remove(site)"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </Teleport>
             </div>
           </td>
         </tr>

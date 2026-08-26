@@ -49,14 +49,21 @@ const trendOption = computed<EChartsOption>(() => ({
   grid: { left: 40, right: 16, top: 32, bottom: 24 },
   xAxis: { type: 'time' },
   yAxis: { type: 'value', min: 0, max: 100 },
-  series: CATEGORIES.map((c, i) => ({
-    name: c.label,
-    type: 'line',
-    showSymbol: false,
-    connectNulls: true,
-    color: [chartColors.primary, chartColors.accent, chartColors.up, chartColors.maint][i],
-    data: props.points.filter((p) => !p.error).map((p) => [parseDbTime(p.measuredAt), p[c.key]]),
-  })),
+  series: CATEGORIES.map((c, i) => {
+    // The registered chart theme sets a default lineStyle/itemStyle color for all
+    // line series — the top-level `color` shorthand loses to that default, so the
+    // color must be set explicitly on each style object to actually take effect.
+    const color = [chartColors.primary, chartColors.accent, chartColors.up, chartColors.maint][i]
+    return {
+      name: c.label,
+      type: 'line',
+      showSymbol: false,
+      connectNulls: true,
+      lineStyle: { color },
+      itemStyle: { color },
+      data: props.points.filter((p) => !p.error).map((p) => [parseDbTime(p.measuredAt), p[c.key]]),
+    }
+  }),
 }))
 </script>
 

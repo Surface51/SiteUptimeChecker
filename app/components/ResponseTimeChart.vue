@@ -95,18 +95,25 @@ const option = computed<EChartsOption>(() => {
   }
 
   const phases = props.points.map((p) => ({ checkedAt: p.checkedAt, phases: phaseDurations(p) }))
-  const series = ['dns', 'tcp', 'tls', 'wait', 'download'].map((key, i) => ({
-    name: { dns: 'DNS', tcp: 'Connect', tls: 'TLS', wait: 'Wait (TTFB)', download: 'Download' }[key],
-    type: 'line',
-    stack: 'total',
-    areaStyle: { opacity: 0.55 },
-    showSymbol: false,
-    lineStyle: { width: 1 },
-    // Light-to-dark neutral ramp with the accent on the dominant phase, per the
-    // design system's connection-phase treatment.
-    color: [chartColors.extra2, chartColors.extra1, chartColors.primary, chartColors.accent, chartColors.maint][i],
-    data: phases.map((p) => [parseDbTime(p.checkedAt), p.phases ? p.phases[key as keyof NonNullable<typeof p.phases>] : null]),
-  }))
+  // Distinct hue per phase — mirrors the timing waterfall's per-segment coloring
+  // instead of a grayscale ramp, so stacked areas stay visually separable.
+  const phaseColors = [chartColors.neutral, chartColors.maint, chartColors.degraded, chartColors.accent, chartColors.up]
+  const series = ['dns', 'tcp', 'tls', 'wait', 'download'].map((key, i) => {
+    // The registered chart theme sets a default lineStyle/itemStyle color for all
+    // line series — the top-level `color` shorthand loses to that default, so the
+    // color must be set explicitly on each style object to actually take effect.
+    const color = phaseColors[i]
+    return {
+      name: { dns: 'DNS', tcp: 'Connect', tls: 'TLS', wait: 'Wait (TTFB)', download: 'Download' }[key],
+      type: 'line',
+      stack: 'total',
+      areaStyle: { opacity: 0.55, color },
+      showSymbol: false,
+      lineStyle: { width: 1, color },
+      itemStyle: { color },
+      data: phases.map((p) => [parseDbTime(p.checkedAt), p.phases ? p.phases[key as keyof NonNullable<typeof p.phases>] : null]),
+    }
+  })
 
   return {
     ...base,
