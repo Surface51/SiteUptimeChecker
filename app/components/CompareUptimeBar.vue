@@ -25,19 +25,19 @@ const option = computed<EChartsOption>(() => ({
   xAxis: { type: 'category', data: labels.value, axisLabel: { fontSize: 10 } },
   yAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value}%' } },
   series: [
-    { name: '24h', type: 'bar', barMaxWidth: 24, itemStyle: { color: chartColors.sky }, data: props.rows.map((r) => r.uptime24h) },
-    { name: '7d', type: 'bar', barMaxWidth: 24, itemStyle: { color: chartColors.emerald }, data: props.rows.map((r) => r.uptime7d) },
-    { name: '30d', type: 'bar', barMaxWidth: 24, itemStyle: { color: chartColors.amber }, data: props.rows.map((r) => r.uptime30d) },
+    { name: '24h', type: 'bar', barMaxWidth: 24, itemStyle: { color: chartColors.primary, borderRadius: [999, 999, 0, 0] }, data: props.rows.map((r) => r.uptime24h) },
+    { name: '7d', type: 'bar', barMaxWidth: 24, itemStyle: { color: chartColors.accent, borderRadius: [999, 999, 0, 0] }, data: props.rows.map((r) => r.uptime7d) },
+    { name: '30d', type: 'bar', barMaxWidth: 24, itemStyle: { color: chartColors.extra1, borderRadius: [999, 999, 0, 0] }, data: props.rows.map((r) => r.uptime30d) },
   ],
 }))
 </script>
 
 <template>
-  <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-    <h2 class="mb-3 text-sm font-medium text-slate-200">Uptime comparison</h2>
+  <UiCard>
+    <UiSectionHeading class="mb-4">Uptime comparison</UiSectionHeading>
     <div v-if="rows.length" class="h-64">
       <BaseChart :option="option" />
     </div>
-    <div v-else class="flex h-64 items-center justify-center text-sm text-slate-600">No data</div>
-  </div>
+    <div v-else class="flex h-64 items-center justify-center text-sm text-tertiary">No data</div>
+  </UiCard>
 </template>

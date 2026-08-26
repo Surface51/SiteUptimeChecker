@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import type { CompareRow } from '#shared/types'
+import { comparePalette } from '../utils/echarts'
 
 const props = defineProps<{ rows: CompareRow[] }>()
+
+// Same series colors the compare charts use, so the header dots act as a shared legend.
+const seriesColors = computed(() => {
+  const palette = comparePalette()
+  return props.rows.map((_, i) => palette[i % palette.length])
+})
 
 function hostname(row: CompareRow) {
   try {
@@ -60,24 +67,31 @@ const metricsView = computed(() =>
 </script>
 
 <template>
-  <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/50">
+  <div class="overflow-x-auto rounded-lg border border-border-default bg-raised">
     <table class="w-full min-w-[480px] border-collapse text-sm">
       <thead>
-        <tr class="border-b border-slate-800 text-left text-xs text-slate-500">
-          <th class="px-4 py-2.5 font-medium">Metric</th>
-          <th v-for="row in rows" :key="row.site.id" class="px-4 py-2.5 text-right font-medium text-slate-300">
-            {{ row.site.name || hostname(row) }}
+        <tr class="border-b border-border-default text-left">
+          <th class="px-4 py-3.5 text-xs font-semibold tracking-wide text-tertiary uppercase">Metric</th>
+          <th
+            v-for="(row, i) in rows"
+            :key="row.site.id"
+            class="px-4 py-3.5 text-xs font-semibold tracking-wide text-tertiary uppercase"
+          >
+            <span class="inline-flex items-center gap-2">
+              <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ backgroundColor: seriesColors[i] }" />
+              <span class="text-primary normal-case">{{ row.site.name || hostname(row) }}</span>
+            </span>
           </th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="metric in metricsView" :key="metric.label" class="border-b border-slate-800/60 last:border-0">
-          <td class="px-4 py-2.5 text-slate-400">{{ metric.label }}</td>
+        <tr v-for="metric in metricsView" :key="metric.label" class="border-b border-border-default last:border-0">
+          <td class="px-4 py-3.5 text-secondary">{{ metric.label }}</td>
           <td
             v-for="(row, i) in rows"
             :key="row.site.id"
-            class="px-4 py-2.5 text-right"
-            :class="metric.bestIdx === i ? 'font-semibold text-emerald-300' : 'text-slate-300'"
+            class="px-4 py-3.5 text-right"
+            :class="metric.bestIdx === i ? 'font-semibold text-up' : 'text-secondary'"
           >
             {{ metric.format(metric.values[i]!) }}
           </td>

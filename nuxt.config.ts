@@ -7,6 +7,32 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   css: ['~/assets/css/main.css'],
+  app: {
+    head: {
+      link: [
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+        {
+          rel: 'stylesheet',
+          href: 'https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700;800&display=swap',
+        },
+        {
+          // display=block, not swap — the ligature fallback would render the raw
+          // icon name ("check_circle") as text before the font lands.
+          rel: 'stylesheet',
+          href: 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0&display=block',
+        },
+      ],
+      script: [
+        {
+          // Applies the persisted theme before first paint. Without this the
+          // server-rendered (light) markup flashes before the client hydrates.
+          innerHTML: `(function(){try{var t=localStorage.getItem('siteUptime.theme');var d=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.setAttribute('data-theme','dark')}catch(e){}})()`,
+          tagPriority: 'critical',
+        },
+      ],
+    },
+  },
   vite: {
     plugins: [tailwindcss()],
   },

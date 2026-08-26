@@ -27,10 +27,10 @@ const responseLabel = computed(() => {
 
 const performanceColor = computed(() => {
   const p = props.site.latestPerformance
-  if (p === null) return 'bg-slate-800/60 text-slate-500'
-  if (p >= 90) return 'bg-emerald-900/40 text-emerald-300'
-  if (p >= 50) return 'bg-amber-900/40 text-amber-300'
-  return 'bg-rose-900/40 text-rose-300'
+  if (p === null) return 'bg-sunken text-tertiary'
+  if (p >= 90) return 'bg-up-tint text-up'
+  if (p >= 50) return 'bg-degraded-tint text-degraded'
+  return 'bg-down-tint text-down'
 })
 
 const screenshotSrc = computed(() => {
@@ -75,9 +75,11 @@ async function togglePaused() {
 </script>
 
 <template>
-  <div class="group relative rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden hover:border-slate-700 transition-colors">
-    <NuxtLink :to="`/sites/${site.id}`" class="block">
-      <div class="aspect-video w-full bg-slate-800/60 overflow-hidden">
+  <div
+    class="group relative overflow-hidden rounded-lg border border-border-default bg-raised transition-colors duration-100 ease-snappy hover:border-border-strong"
+  >
+    <NuxtLink :to="`/sites/${site.id}`" class="block no-underline">
+      <div class="aspect-video w-full overflow-hidden border-b border-border-default bg-sunken">
         <img
           v-if="screenshotSrc && !screenshotFailed"
           :src="screenshotSrc"
@@ -85,36 +87,35 @@ async function togglePaused() {
           class="h-full w-full object-cover object-top"
           @error="screenshotFailed = true"
         />
-        <div v-else class="flex h-full w-full items-center justify-center text-slate-600">
-          <span class="text-3xl">🌐</span>
+        <div v-else class="flex h-full w-full items-center justify-center text-tertiary">
+          <UiIcon name="public" :size="34" />
         </div>
       </div>
-      <div class="p-4">
+
+      <div class="flex flex-col gap-3.5 p-6">
         <div class="flex items-center justify-between gap-2">
-          <h3 class="truncate font-medium text-slate-100">{{ site.name || hostname }}</h3>
-          <span v-if="!site.enabled" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500">
-            <span class="h-2 w-2 rounded-full bg-slate-600" />
-            Paused
-          </span>
-          <StatusBadge v-else :status="site.latestCheck?.status ?? null" />
+          <h3 class="truncate font-display text-lg font-semibold text-primary">{{ site.name || hostname }}</h3>
+          <StatusBadge
+            :status="site.latestCheck?.status ?? null"
+            :state="!site.enabled ? 'paused' : undefined"
+          />
         </div>
-        <div class="mt-0.5 flex items-center justify-between gap-2">
-          <p class="truncate text-xs text-slate-500">{{ hostname }}</p>
+
+        <div class="flex items-center justify-between gap-2">
+          <p class="truncate text-xs text-tertiary">{{ hostname }}</p>
           <span
             v-if="site.latestPerformance !== null"
-            class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
+            class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold"
             :class="performanceColor"
             title="Lighthouse Performance (mobile)"
           >
             LH {{ site.latestPerformance }}
           </span>
         </div>
-        <div v-if="site.inMaintenance" class="mt-1.5 inline-flex items-center rounded-full bg-sky-900/40 px-2 py-0.5 text-[11px] font-medium text-sky-300">
-          Maintenance
-        </div>
+
+        <UiBadge v-if="site.inMaintenance" tone="maint" class="self-start">Maintenance</UiBadge>
 
         <TagEditor
-          class="mt-1.5"
           size="sm"
           :site-id="site.id"
           :tags="site.tags"
@@ -124,36 +125,37 @@ async function togglePaused() {
           @toggle-filter="emit('toggle-filter', $event)"
         />
 
-        <div class="mt-3 flex items-center justify-between text-sm">
+        <div class="flex items-center justify-between">
           <div>
-            <div class="text-slate-500 text-xs">Uptime (24h)</div>
-            <div class="text-slate-200">{{ uptimeLabel }}</div>
+            <div class="text-xs text-tertiary">Uptime (24h)</div>
+            <div class="text-base font-medium text-primary">{{ uptimeLabel }}</div>
           </div>
           <div class="text-right">
-            <div class="text-slate-500 text-xs">Response</div>
-            <div class="text-slate-200">{{ responseLabel }}</div>
+            <div class="text-xs text-tertiary">Response</div>
+            <div class="text-base font-medium text-primary">{{ responseLabel }}</div>
           </div>
         </div>
 
-        <div class="mt-2 flex items-center justify-between gap-2">
+        <div class="flex items-center justify-between gap-2">
           <Sparkline :points="site.sparkline" />
-          <span
+          <UiBadge
             v-if="site.latestCheck?.sslDaysRemaining !== null && site.latestCheck?.sslDaysRemaining !== undefined && site.latestCheck.sslDaysRemaining < 14"
-            class="whitespace-nowrap rounded-full bg-amber-900/40 px-2 py-0.5 text-[11px] font-medium text-amber-300"
+            tone="degraded"
+            class="whitespace-nowrap"
           >
-            SSL expires in {{ site.latestCheck.sslDaysRemaining }}d
-          </span>
+            SSL {{ site.latestCheck.sslDaysRemaining }}d
+          </UiBadge>
         </div>
 
-        <UptimeBar class="mt-3" :ticks="site.statusTicks" />
+        <UptimeBar :ticks="site.statusTicks" />
       </div>
     </NuxtLink>
 
-    <div class="absolute right-2 top-2 hidden gap-1.5 group-hover:flex">
+    <div class="absolute top-3 right-3 hidden gap-1.5 group-hover:flex">
       <button
         type="button"
         :disabled="checking"
-        class="rounded-md bg-slate-950/70 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+        class="cursor-pointer rounded-full border border-border-default bg-raised px-2.5 py-1 text-xs font-medium text-secondary transition-colors hover:bg-inverse hover:text-on-inverse disabled:opacity-50"
         @click.stop.prevent="checkNow"
       >
         {{ checking ? 'Checking…' : 'Check now' }}
@@ -161,14 +163,14 @@ async function togglePaused() {
       <button
         type="button"
         :disabled="toggling"
-        class="rounded-md bg-slate-950/70 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+        class="cursor-pointer rounded-full border border-border-default bg-raised px-2.5 py-1 text-xs font-medium text-secondary transition-colors hover:bg-inverse hover:text-on-inverse disabled:opacity-50"
         @click.stop.prevent="togglePaused"
       >
         {{ site.enabled ? 'Pause' : 'Resume' }}
       </button>
       <button
         type="button"
-        class="rounded-md bg-slate-950/70 px-2 py-1 text-xs text-slate-300 hover:bg-rose-900/70 hover:text-rose-200"
+        class="cursor-pointer rounded-full border border-border-default bg-raised px-2.5 py-1 text-xs font-medium text-secondary transition-colors hover:border-down hover:bg-down hover:text-white"
         @click.stop.prevent="remove"
       >
         Remove

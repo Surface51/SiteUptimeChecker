@@ -1,17 +1,8 @@
 <script setup lang="ts">
 import type { CompareRow } from '#shared/types'
-import { chartColors, type EChartsOption } from '../utils/echarts'
+import { chartColors, comparePalette, type EChartsOption } from '../utils/echarts'
 
 const props = defineProps<{ rows: CompareRow[] }>()
-
-const palette = [
-  chartColors.sky,
-  chartColors.emerald,
-  chartColors.amber,
-  chartColors.rose,
-  chartColors.slate,
-  chartColors.violet,
-]
 
 function hostname(row: CompareRow) {
   try {
@@ -23,7 +14,9 @@ function hostname(row: CompareRow) {
 
 const hasData = computed(() => props.rows.some((r) => r.lighthouse.performance !== null))
 
-const option = computed<EChartsOption>(() => ({
+const option = computed<EChartsOption>(() => {
+  const palette = comparePalette()
+  return {
   legend: { top: 0, textStyle: { fontSize: 11 } },
   tooltip: {},
   radar: {
@@ -55,15 +48,16 @@ const option = computed<EChartsOption>(() => ({
       })),
     },
   ],
-}))
+  }
+})
 </script>
 
 <template>
-  <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-    <h2 class="mb-3 text-sm font-medium text-slate-200">Lighthouse (mobile)</h2>
+  <UiCard>
+    <UiSectionHeading class="mb-4">Lighthouse (mobile)</UiSectionHeading>
     <div v-if="hasData" class="h-72">
       <BaseChart :option="option" />
     </div>
-    <div v-else class="flex h-72 items-center justify-center text-sm text-slate-600">No Lighthouse reports yet</div>
-  </div>
+    <div v-else class="flex h-72 items-center justify-center text-sm text-tertiary">No Lighthouse reports yet</div>
+  </UiCard>
 </template>

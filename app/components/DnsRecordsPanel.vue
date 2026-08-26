@@ -39,34 +39,29 @@ function formatTime(iso: string) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3">
-    <div class="flex items-center justify-between">
-      <div class="text-xs text-slate-500">
+  <div class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="text-xs text-tertiary">
         {{ latest ? `Last checked ${formatTime(latest.checkedAt)}` : 'No DNS data yet' }}
       </div>
-      <button
-        type="button"
-        :disabled="refreshing"
-        class="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
-        @click="refreshNow"
-      >
+      <UiButton variant="secondary" :disabled="refreshing" @click="refreshNow">
         {{ refreshing ? 'Checking…' : 'Refresh now' }}
-      </button>
+      </UiButton>
     </div>
 
-    <div v-if="latest" class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+    <div v-if="latest" class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
       <div v-for="group in GROUPS" :key="group.key">
-        <div class="text-xs text-slate-500">{{ group.label }}</div>
-        <div class="text-slate-200 break-words">
+        <div class="text-xs tracking-wide text-tertiary uppercase">{{ group.label }}</div>
+        <div class="break-words text-primary">
           {{ latest[group.key].length ? latest[group.key].join(', ') : '—' }}
         </div>
       </div>
     </div>
 
-    <div v-if="latest?.error" class="text-xs text-rose-400">{{ latest.error }}</div>
+    <div v-if="latest?.error" class="text-xs text-down">{{ latest.error }}</div>
 
-    <div v-if="!latest" class="rounded-xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-500">
+    <UiEmptyState v-if="!latest" icon="dns">
       No DNS data yet — click "Refresh now" to look it up.
-    </div>
+    </UiEmptyState>
   </div>
 </template>

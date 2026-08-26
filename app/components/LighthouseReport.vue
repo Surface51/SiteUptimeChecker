@@ -47,10 +47,10 @@ const previous = computed(() => {
 })
 
 function scoreColor(config: TileConfig, value: number): string {
-  if (!config.isScore) return 'text-slate-100'
-  if (value >= 90) return 'text-emerald-300'
-  if (value >= 50) return 'text-amber-300'
-  return 'text-rose-300'
+  if (!config.isScore) return 'text-primary'
+  if (value >= 90) return 'text-up'
+  if (value >= 50) return 'text-degraded'
+  return 'text-down'
 }
 
 function delta(config: TileConfig): { text: string; color: string } | null {
@@ -59,11 +59,11 @@ function delta(config: TileConfig): { text: string; color: string } | null {
   const prev = previous.value[config.key] as number | null
   if (cur === null || prev === null) return null
   const diff = cur - prev
-  if (Math.abs(diff) < (config.isScore ? 1 : 0.001)) return { text: '—', color: 'text-slate-500' }
+  if (Math.abs(diff) < (config.isScore ? 1 : 0.001)) return { text: '—', color: 'text-tertiary' }
   const improved = config.higherIsBetter ? diff > 0 : diff < 0
   const arrow = diff > 0 ? '▲' : '▼'
   const magnitude = config.isScore ? Math.abs(Math.round(diff)) : config.format(Math.abs(diff))
-  return { text: `${arrow} ${magnitude}`, color: improved ? 'text-emerald-400' : 'text-rose-400' }
+  return { text: `${arrow} ${magnitude}`, color: improved ? 'text-up' : 'text-down' }
 }
 
 const { ping: pingProgress } = useLighthouseProgress()
@@ -88,58 +88,41 @@ function formatTime(iso: string) {
 
 <template>
   <div class="flex flex-col gap-4">
-    <div class="flex items-center justify-between">
-      <div class="flex gap-1 rounded-md border border-slate-800 p-0.5 text-xs">
-        <button
-          type="button"
-          class="rounded px-2 py-1"
-          :class="formFactor === 'mobile' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
-          @click="emit('update:formFactor', 'mobile')"
-        >
-          Mobile
-        </button>
-        <button
-          type="button"
-          class="rounded px-2 py-1"
-          :class="formFactor === 'desktop' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
-          @click="emit('update:formFactor', 'desktop')"
-        >
-          Desktop
-        </button>
-      </div>
-      <button
-        type="button"
-        :disabled="running"
-        class="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
-        @click="runLighthouse"
-      >
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <UiSegmentedControl
+        :model-value="formFactor"
+        :options="[
+          { label: 'Mobile', value: 'mobile', icon: 'smartphone' },
+          { label: 'Desktop', value: 'desktop', icon: 'desktop_windows' },
+        ]"
+        @update:model-value="emit('update:formFactor', $event as LighthouseFormFactor)"
+      />
+      <UiButton variant="secondary" :disabled="running" @click="runLighthouse">
         {{ running ? 'Running…' : 'Run reports' }}
-      </button>
+      </UiButton>
     </div>
 
-    <div v-if="latest" class="text-xs text-slate-500">
-      Last run {{ formatTime(latest.measuredAt) }}
-    </div>
+    <div v-if="latest" class="text-xs text-tertiary">Last run {{ formatTime(latest.measuredAt) }}</div>
 
-    <div v-if="latest" class="grid grid-cols-2 gap-3 sm:grid-cols-5">
-      <div v-for="tile in TILES" :key="tile.key" class="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-        <div class="text-xs text-slate-500">{{ tile.label }}</div>
-        <div class="mt-1 flex items-baseline gap-2">
+    <div v-if="latest" class="grid grid-cols-2 gap-4 sm:grid-cols-5">
+      <UiCard v-for="tile in TILES" :key="tile.key" padding="p-4">
+        <div class="text-xs tracking-wide text-tertiary uppercase">{{ tile.label }}</div>
+        <div class="mt-1.5 flex items-baseline gap-2">
           <span
-            class="text-xl font-semibold"
-            :class="latest[tile.key] === null ? 'text-slate-600' : scoreColor(tile, latest[tile.key] as number)"
+            class="font-display text-2xl font-bold"
+            :class="latest[tile.key] === null ? 'text-tertiary' : scoreColor(tile, latest[tile.key] as number)"
           >
             {{ latest[tile.key] === null ? '—' : tile.format(latest[tile.key] as number) }}
           </span>
-          <span v-if="delta(tile)" class="text-xs font-medium" :class="delta(tile)!.color">
+          <span v-if="delta(tile)" class="text-xs font-semibold" :class="delta(tile)!.color">
             {{ delta(tile)!.text }}
           </span>
         </div>
-      </div>
+      </UiCard>
     </div>
 
-    <div v-else class="rounded-xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-500">
-      No Lighthouse report yet — click "Run Lighthouse" to audit this site.
-    </div>
+    <UiEmptyState v-else icon="speed">
+      No Lighthouse report yet — click "Run reports" to audit this site.
+    </UiEmptyState>
   </div>
 </template>

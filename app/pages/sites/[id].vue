@@ -212,15 +212,22 @@ async function removeSite() {
 </script>
 
 <template>
-  <div v-if="siteError" class="rounded-lg border border-rose-900 bg-rose-950/40 p-4 text-sm text-rose-300">
+  <div v-if="siteError" class="rounded-lg border border-down bg-down-tint p-4 text-sm text-down">
     Site not found.
   </div>
 
-  <div v-else-if="site" class="flex flex-col gap-6">
-    <NuxtLink to="/" class="text-sm text-slate-500 hover:text-slate-300">← Back to dashboard</NuxtLink>
+  <div v-else-if="site" class="flex flex-col gap-10">
+    <NuxtLink
+      to="/"
+      class="inline-flex w-fit items-center gap-1.5 text-sm text-secondary no-underline transition-colors hover:text-primary"
+    >
+      <UiIcon name="arrow_back" :size="16" />
+      Back to dashboard
+    </NuxtLink>
 
-    <div class="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/50">
-      <div class="aspect-[3/1] w-full bg-slate-800/60">
+    <!-- Header -->
+    <UiCard flush>
+      <div class="aspect-[3/1] w-full border-b border-border-default bg-sunken">
         <img
           v-if="screenshotSrc && !screenshotFailed"
           :src="screenshotSrc"
@@ -228,243 +235,194 @@ async function removeSite() {
           class="h-full w-full object-cover object-top"
           @error="screenshotFailed = true"
         />
-        <div v-else class="flex h-full w-full items-center justify-center text-slate-600">
-          <span class="text-4xl">🌐</span>
+        <div v-else class="flex h-full w-full items-center justify-center text-tertiary">
+          <UiIcon name="public" :size="44" />
         </div>
       </div>
 
-      <div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div class="min-w-0">
-          <div class="flex items-center gap-2">
-            <h1 class="truncate text-lg font-semibold text-slate-100">{{ site.name || hostname }}</h1>
-            <span v-if="!site.enabled" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500">
-              <span class="h-2 w-2 rounded-full bg-slate-600" />
-              Paused
-            </span>
-            <StatusBadge v-else :status="site.latestCheck?.status ?? null" />
-            <span v-if="site.inMaintenance" class="rounded-full bg-sky-900/40 px-2 py-0.5 text-[11px] font-medium text-sky-300">
-              Maintenance
-            </span>
+      <div class="flex flex-col gap-4 p-6 sm:flex-row sm:items-start sm:justify-between">
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-3">
+            <h1 class="truncate font-display text-4xl font-bold tracking-tight text-primary">
+              {{ site.name || hostname }}
+            </h1>
+            <StatusBadge
+              :status="site.latestCheck?.status ?? null"
+              :state="!site.enabled ? 'paused' : undefined"
+              size="md"
+            />
+            <UiBadge v-if="site.inMaintenance" tone="maint">Maintenance</UiBadge>
           </div>
-          <a :href="site.url" target="_blank" rel="noopener" class="text-sm text-slate-500 hover:text-slate-300">
+          <a
+            :href="site.url"
+            target="_blank"
+            rel="noopener"
+            class="mt-1.5 inline-block text-sm text-tertiary no-underline transition-colors hover:text-accent"
+          >
             {{ site.url }}
           </a>
-          <p v-if="site.latestCheck?.pageTitle" class="mt-0.5 truncate text-xs text-slate-600">
+          <p v-if="site.latestCheck?.pageTitle" class="mt-1 truncate text-xs text-tertiary">
             {{ site.latestCheck.pageTitle }}
           </p>
           <TagEditor
-            class="mt-2"
+            class="mt-3"
             :site-id="site.id"
             :tags="site.tags"
             :suggestions="allTags"
-            @changed="refreshSite"
+            @changed="() => refreshSite()"
           />
         </div>
 
-        <div class="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            :disabled="checking"
-            class="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
-            @click="checkNow"
-          >
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <UiButton variant="secondary" :disabled="checking" @click="checkNow">
             {{ checking ? 'Checking…' : 'Check now' }}
-          </button>
-          <button
-            type="button"
-            :disabled="toggling"
-            class="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
-            @click="togglePaused"
-          >
+          </UiButton>
+          <UiButton variant="secondary" :disabled="toggling" @click="togglePaused">
             {{ site.enabled ? 'Pause' : 'Resume' }}
-          </button>
-          <button
-            type="button"
-            class="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
-            @click="startEdit"
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            :disabled="deleting"
-            class="rounded-md border border-rose-900 px-3 py-1.5 text-sm text-rose-300 hover:bg-rose-950/60 disabled:opacity-50"
-            @click="removeSite"
-          >
-            Remove
-          </button>
+          </UiButton>
+          <UiButton variant="ghost" @click="startEdit">Edit</UiButton>
+          <UiButton variant="danger" :disabled="deleting" @click="removeSite">Remove</UiButton>
         </div>
       </div>
 
-      <form v-if="isEditing" class="border-t border-slate-800 p-4" @submit.prevent="saveEdit">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div class="flex-1">
-            <label class="mb-1 block text-xs text-slate-500">URL</label>
-            <input
-              v-model="editUrl"
-              type="text"
-              class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
-            />
-          </div>
-          <div class="sm:w-48">
-            <label class="mb-1 block text-xs text-slate-500">Name</label>
-            <input
-              v-model="editName"
-              type="text"
-              class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
-            />
-          </div>
-          <div class="sm:w-44">
-            <label class="mb-1 block text-xs text-slate-500">Interval</label>
-            <select
-              v-model.number="editInterval"
-              class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
-            >
-              <option v-for="opt in intervalOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-            </select>
+      <form v-if="isEditing" class="flex flex-col gap-4 border-t border-border-default p-6" @submit.prevent="saveEdit">
+        <div class="flex flex-col gap-4 sm:flex-row">
+          <div class="flex-1"><UiInput v-model="editUrl" label="URL" /></div>
+          <div class="sm:w-52"><UiInput v-model="editName" label="Name" /></div>
+          <div class="sm:w-52">
+            <UiSelect v-model="editInterval" label="Interval" :options="intervalOptions" />
           </div>
         </div>
-        <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div class="sm:w-44">
-            <label class="mb-1 block text-xs text-slate-500">Degraded threshold (ms)</label>
-            <input
-              v-model.number="editDegradedMs"
-              type="number"
-              min="100"
-              max="60000"
-              class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
-            />
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <div class="sm:w-52">
+            <UiInput v-model="editDegradedMs" label="Degraded threshold (ms)" type="number" min="100" max="60000" />
           </div>
-          <div class="sm:w-44">
-            <label class="mb-1 block text-xs text-slate-500">Expected status (optional)</label>
-            <input
-              v-model="editExpectedStatus"
-              type="text"
-              placeholder="e.g. 401"
-              class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
-            />
+          <div class="sm:w-52">
+            <UiInput v-model="editExpectedStatus" label="Expected status (optional)" placeholder="e.g. 401" />
           </div>
           <div class="flex gap-2">
-            <button
-              type="submit"
-              :disabled="saving"
-              class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-            >
+            <UiButton type="submit" variant="primary" :disabled="saving">
               {{ saving ? 'Saving…' : 'Save' }}
-            </button>
-            <button
-              type="button"
-              class="rounded-md border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
-              @click="isEditing = false"
-            >
-              Cancel
-            </button>
+            </UiButton>
+            <UiButton variant="ghost" @click="isEditing = false">Cancel</UiButton>
           </div>
         </div>
-        <p v-if="editError" class="mt-2 text-sm text-rose-400">{{ editError }}</p>
+        <p v-if="editError" class="text-sm text-down">{{ editError }}</p>
       </form>
-    </div>
+    </UiCard>
 
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <UptimeGauge label="Uptime (24h)" :value="site.uptime24h" />
-      <UptimeGauge label="Uptime (7d)" :value="site.uptime7d" />
-      <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-        <div class="text-xs text-slate-500">Avg / p95 response</div>
-        <div class="mt-1 text-2xl font-semibold text-slate-100">
-          {{ avgResponseMs === null ? '—' : `${Math.round(avgResponseMs)} ms` }}
-          <span class="text-sm font-normal text-slate-500">
-            / {{ p95ResponseMs === null ? '—' : `${Math.round(p95ResponseMs)} ms` }}
-          </span>
+    <!-- Key stats -->
+    <UiCard padding="px-8 py-7">
+      <div class="grid grid-cols-2 gap-6 lg:grid-cols-4">
+        <UiStatBlock
+          :value="site.uptime24h === null ? '—' : `${site.uptime24h.toFixed(2)}%`"
+          label="Uptime (24h)"
+          icon="monitoring"
+        />
+        <UiStatBlock
+          :value="site.uptime7d === null ? '—' : `${site.uptime7d.toFixed(2)}%`"
+          label="Uptime (7d)"
+          icon="calendar_month"
+        />
+        <UiStatBlock
+          :value="avgResponseMs === null ? '—' : `${Math.round(avgResponseMs)} ms`"
+          :label="`Avg response · p95 ${p95ResponseMs === null ? '—' : `${Math.round(p95ResponseMs)} ms`}`"
+          icon="speed"
+        />
+        <UiStatBlock
+          :value="site.latestCheck?.sslDaysRemaining ?? '—'"
+          label="SSL days remaining"
+          icon="lock"
+          :value-class="(site.latestCheck?.sslDaysRemaining ?? 999) < 14 ? 'text-degraded' : undefined"
+        />
+      </div>
+    </UiCard>
+
+    <!-- Availability -->
+    <section class="flex flex-col gap-4">
+      <UiSectionHeading>Availability</UiSectionHeading>
+      <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <UptimeGauge label="Uptime (24h)" :value="site.uptime24h" />
+        <UptimeGauge label="Uptime (7d)" :value="site.uptime7d" />
+      </div>
+      <UiCard>
+        <UiSectionHeading as="h3" class="mb-4">Recent checks</UiSectionHeading>
+        <UptimeBar :ticks="recentTicks" />
+      </UiCard>
+      <UiCard>
+        <UiSectionHeading as="h3" class="mb-4">Daily uptime (90d)</UiSectionHeading>
+        <UptimeCalendar :days="dailyUptime ?? []" />
+      </UiCard>
+    </section>
+
+    <!-- Performance -->
+    <section class="flex flex-col gap-4">
+      <UiSectionHeading>Performance</UiSectionHeading>
+      <UiCard>
+        <UiSectionHeading as="h3" class="mb-4">
+          Response time
+          <template #actions>
+            <UiSegmentedControl v-model="selectedHours" :options="hoursOptions" />
+          </template>
+        </UiSectionHeading>
+        <ResponseTimeChart
+          :points="history ?? []"
+          :degraded-ms="site.degradedMs"
+          :incidents="incidents ?? []"
+          :maintenance-windows="maintenanceWindows ?? []"
+        />
+      </UiCard>
+      <UiCard>
+        <UiSectionHeading as="h3" class="mb-4">Lighthouse</UiSectionHeading>
+        <LighthouseReport
+          :site-id="id"
+          :form-factor="lhFormFactor"
+          :history="lighthouseHistory ?? []"
+          @update:form-factor="lhFormFactor = $event"
+          @ran="() => { refreshLighthouse(); refreshNotifications() }"
+        />
+        <div class="mt-6">
+          <LighthousePerfChart :points="lighthouseHistory ?? []" />
         </div>
+      </UiCard>
+    </section>
+
+    <!-- Domain & DNS -->
+    <section class="flex flex-col gap-4">
+      <UiSectionHeading>Domain &amp; DNS</UiSectionHeading>
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <UiCard>
+          <UiSectionHeading as="h3" class="mb-4">WHOIS</UiSectionHeading>
+          <WhoisPanel :site-id="id" :history="whoisHistory ?? []" @ran="refreshWhois" />
+        </UiCard>
+        <UiCard>
+          <UiSectionHeading as="h3" class="mb-4">DNS records</UiSectionHeading>
+          <DnsRecordsPanel :site-id="id" :history="dnsHistory ?? []" @ran="refreshDns" />
+        </UiCard>
       </div>
-      <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-        <div class="text-xs text-slate-500">SSL days remaining</div>
-        <div
-          class="mt-1 text-2xl font-semibold"
-          :class="(site.latestCheck?.sslDaysRemaining ?? 999) < 14 ? 'text-amber-300' : 'text-slate-100'"
-        >
-          {{ site.latestCheck?.sslDaysRemaining ?? '—' }}
-        </div>
-      </div>
-    </div>
+    </section>
 
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-      <h2 class="mb-3 text-sm font-medium text-slate-200">Recent checks</h2>
-      <UptimeBar :ticks="recentTicks" />
-    </div>
+    <!-- Incidents & maintenance -->
+    <section class="flex flex-col gap-4">
+      <UiSectionHeading>Incidents &amp; maintenance</UiSectionHeading>
+      <IncidentList :incidents="incidents ?? []" />
+      <UiCard v-if="(incidents ?? []).some((i) => i.endedAt !== null)">
+        <UiSectionHeading as="h3" class="mb-4">Incident duration (MTTR trend)</UiSectionHeading>
+        <IncidentDurationBar :incidents="incidents ?? []" />
+      </UiCard>
+      <MaintenanceManager :site-id="id" />
+    </section>
 
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-      <h2 class="mb-3 text-sm font-medium text-slate-200">Daily uptime (90d)</h2>
-      <UptimeCalendar :days="dailyUptime ?? []" />
-    </div>
-
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-      <div class="mb-3 flex items-center justify-between">
-        <h2 class="text-sm font-medium text-slate-200">Response time</h2>
-        <div class="flex gap-1 rounded-md border border-slate-800 p-0.5 text-xs">
-          <button
-            v-for="opt in hoursOptions"
-            :key="opt.value"
-            type="button"
-            class="rounded px-2 py-1"
-            :class="selectedHours === opt.value ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
-            @click="selectedHours = opt.value"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-      </div>
-      <ResponseTimeChart
-        :points="history ?? []"
-        :degraded-ms="site.degradedMs"
-        :incidents="incidents ?? []"
-        :maintenance-windows="maintenanceWindows ?? []"
-      />
-    </div>
-
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-      <h2 class="mb-3 text-sm font-medium text-slate-200">Lighthouse performance</h2>
-      <LighthouseReport
-        :site-id="id"
-        :form-factor="lhFormFactor"
-        :history="lighthouseHistory ?? []"
-        @update:form-factor="lhFormFactor = $event"
-        @ran="() => { refreshLighthouse(); refreshNotifications() }"
-      />
-      <div class="mt-4">
-        <LighthousePerfChart :points="lighthouseHistory ?? []" />
-      </div>
-    </div>
-
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-      <h2 class="mb-3 text-sm font-medium text-slate-200">WHOIS</h2>
-      <WhoisPanel :site-id="id" :history="whoisHistory ?? []" @ran="refreshWhois" />
-    </div>
-
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-      <h2 class="mb-3 text-sm font-medium text-slate-200">DNS records</h2>
-      <DnsRecordsPanel :site-id="id" :history="dnsHistory ?? []" @ran="refreshDns" />
-    </div>
-
-    <SiteNotifications :notifications="siteNotifications ?? []" />
-
-    <div v-if="(incidents ?? []).some((i) => i.endedAt !== null)" class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-      <h2 class="mb-3 text-sm font-medium text-slate-200">Incident duration (MTTR trend)</h2>
-      <IncidentDurationBar :incidents="incidents ?? []" />
-    </div>
-
-    <IncidentList :incidents="incidents ?? []" />
-
-    <MaintenanceManager :site-id="id" />
-
-    <CheckLog :site-id="id" />
-
-    <div v-if="site.latestCheck">
-      <h2 class="mb-3 text-sm font-medium text-slate-200">Latest check details</h2>
-      <CheckDetail :check="site.latestCheck" />
-    </div>
-    <div v-else class="rounded-xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-500">
-      No checks yet — one should land shortly.
-    </div>
+    <!-- Activity -->
+    <section class="flex flex-col gap-4">
+      <UiSectionHeading>Activity</UiSectionHeading>
+      <SiteNotifications :notifications="siteNotifications ?? []" />
+      <CheckLog :site-id="id" />
+      <UiCard v-if="site.latestCheck">
+        <UiSectionHeading as="h3" class="mb-4">Latest check details</UiSectionHeading>
+        <CheckDetail :check="site.latestCheck" />
+      </UiCard>
+      <UiEmptyState v-else icon="pending">No checks yet — one should land shortly.</UiEmptyState>
+    </section>
   </div>
 </template>

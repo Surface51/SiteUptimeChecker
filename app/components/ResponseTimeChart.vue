@@ -30,13 +30,13 @@ const overlayAreas = computed(() => {
   const areas: [Record<string, any>, Record<string, any>][] = []
   for (const inc of props.incidents ?? []) {
     areas.push([
-      { xAxis: parseDbTime(inc.startedAt), itemStyle: { color: 'rgba(251,113,133,0.12)' }, name: 'Incident' },
+      { xAxis: parseDbTime(inc.startedAt), itemStyle: { color: chartColors.down, opacity: 0.12 }, name: 'Incident' },
       { xAxis: inc.endedAt ? parseDbTime(inc.endedAt) : Date.now() },
     ])
   }
   for (const win of props.maintenanceWindows ?? []) {
     areas.push([
-      { xAxis: new Date(win.startsAt).getTime(), itemStyle: { color: 'rgba(56,189,248,0.10)' }, name: 'Maintenance' },
+      { xAxis: new Date(win.startsAt).getTime(), itemStyle: { color: chartColors.maint, opacity: 0.12 }, name: 'Maintenance' },
       { xAxis: new Date(win.endsAt).getTime() },
     ])
   }
@@ -49,7 +49,7 @@ const option = computed<EChartsOption>(() => {
     xAxis: { type: 'time' },
     dataZoom: [
       { type: 'inside' },
-      { type: 'slider', height: 16, bottom: 8, borderColor: chartColors.axisLine, fillerColor: 'rgba(56,189,248,0.15)' },
+      { type: 'slider', height: 16, bottom: 8, borderColor: chartColors.axisLine, fillerColor: 'rgba(0,0,0,0.06)' },
     ],
     tooltip: {
       trigger: 'axis',
@@ -69,13 +69,13 @@ const option = computed<EChartsOption>(() => {
           type: 'line',
           showSymbol: false,
           data: props.points.map((p) => [parseDbTime(p.checkedAt), p.timeTotal]),
-          color: chartColors.sky,
+          color: chartColors.accent,
           lineStyle: { width: 2 },
           markLine: {
             symbol: 'none',
             silent: true,
-            lineStyle: { color: chartColors.amber, type: 'dashed' },
-            label: { formatter: 'Degraded threshold', color: chartColors.amber, fontSize: 10 },
+            lineStyle: { color: chartColors.degraded, type: 'dashed' },
+            label: { formatter: 'Degraded threshold', color: chartColors.degraded, fontSize: 10 },
             data: [{ yAxis: props.degradedMs }],
           },
           markArea: {
@@ -87,7 +87,7 @@ const option = computed<EChartsOption>(() => {
           name: 'Down',
           type: 'scatter',
           symbolSize: 8,
-          itemStyle: { color: chartColors.rose },
+          itemStyle: { color: chartColors.down },
           data: downPoints.map((p) => [parseDbTime(p.checkedAt), p.timeTotal]),
         },
       ],
@@ -102,7 +102,9 @@ const option = computed<EChartsOption>(() => {
     areaStyle: { opacity: 0.55 },
     showSymbol: false,
     lineStyle: { width: 1 },
-    color: [chartColors.sky, chartColors.emerald, chartColors.amber, chartColors.rose, chartColors.slate][i],
+    // Light-to-dark neutral ramp with the accent on the dominant phase, per the
+    // design system's connection-phase treatment.
+    color: [chartColors.extra2, chartColors.extra1, chartColors.primary, chartColors.accent, chartColors.maint][i],
     data: phases.map((p) => [parseDbTime(p.checkedAt), p.phases ? p.phases[key as keyof NonNullable<typeof p.phases>] : null]),
   }))
 
@@ -118,28 +120,19 @@ const option = computed<EChartsOption>(() => {
 
 <template>
   <div class="flex flex-col gap-2">
-    <div class="flex justify-end gap-1 rounded-md border border-slate-800 p-0.5 text-xs w-fit ml-auto">
-      <button
-        type="button"
-        class="rounded px-2 py-1"
-        :class="mode === 'total' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
-        @click="mode = 'total'"
-      >
-        Total
-      </button>
-      <button
-        type="button"
-        class="rounded px-2 py-1"
-        :class="mode === 'breakdown' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
-        @click="mode = 'breakdown'"
-      >
-        Breakdown
-      </button>
+    <div class="ml-auto w-fit">
+      <UiSegmentedControl
+        v-model="mode"
+        :options="[
+          { label: 'Total', value: 'total' },
+          { label: 'Breakdown', value: 'breakdown' },
+        ]"
+      />
     </div>
     <div v-if="points.length" class="h-72">
       <BaseChart :option="option" />
     </div>
-    <div v-else class="flex h-72 items-center justify-center text-sm text-slate-600">
+    <div v-else class="flex h-72 items-center justify-center text-sm text-tertiary">
       No history in this range
     </div>
   </div>

@@ -94,65 +94,54 @@ watch([selectedIds, selectedHours], loadComparison, { immediate: true, deep: tru
 </script>
 
 <template>
-  <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-9">
     <div>
-      <NuxtLink to="/" class="text-sm text-slate-500 hover:text-slate-300">← Back to dashboard</NuxtLink>
-      <h1 class="mt-2 text-lg font-semibold text-slate-100">Compare sites</h1>
+      <h1 class="font-display text-4xl font-bold tracking-tight text-primary">Compare sites</h1>
+      <p class="mt-1.5 text-base text-secondary">
+        Response time, uptime and reliability across the fleet.
+      </p>
     </div>
 
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-      <div class="mb-3 flex items-center justify-between">
-        <h2 class="text-sm font-medium text-slate-200">Sites ({{ selectedIds.length }}/{{ MAX_SITES }})</h2>
-        <div class="flex gap-1 rounded-md border border-slate-800 p-0.5 text-xs">
-          <button
-            v-for="opt in hoursOptions"
-            :key="opt.value"
-            type="button"
-            class="rounded px-2.5 py-1"
-            :class="selectedHours === opt.value ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
-            @click="selectedHours = opt.value"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-      </div>
+    <UiCard>
+      <UiSectionHeading as="h3" class="mb-4">
+        Sites ({{ selectedIds.length }}/{{ MAX_SITES }})
+        <template #actions>
+          <UiSegmentedControl v-model="selectedHours" :options="hoursOptions" />
+        </template>
+      </UiSectionHeading>
       <div v-if="sites.length" class="flex flex-wrap gap-2">
-        <button
+        <UiChip
           v-for="site in sites"
           :key="site.id"
-          type="button"
-          class="rounded-full border px-3 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+          size="sm"
+          :active="selectedIds.includes(site.id)"
           :class="
-            selectedIds.includes(site.id)
-              ? 'border-sky-700 bg-sky-900/40 text-sky-200'
-              : 'border-slate-700 text-slate-400 hover:bg-slate-800'
+            !selectedIds.includes(site.id) && selectedIds.length >= MAX_SITES
+              ? 'pointer-events-none opacity-40'
+              : ''
           "
-          :disabled="!selectedIds.includes(site.id) && selectedIds.length >= MAX_SITES"
           @click="toggleSite(site.id)"
         >
           {{ site.name || hostname(site.url) }}
-        </button>
+        </UiChip>
       </div>
-      <div v-else class="text-sm text-slate-500">No sites yet — add one from the dashboard first.</div>
-    </div>
+      <div v-else class="text-sm text-tertiary">No sites yet — add one from the dashboard first.</div>
+    </UiCard>
 
-    <div
-      v-if="selectedIds.length < 2"
-      class="rounded-xl border border-dashed border-slate-800 p-12 text-center text-slate-500"
-    >
+    <UiEmptyState v-if="selectedIds.length < 2" icon="compare_arrows">
       Select 2 or more sites above to compare.
-    </div>
+    </UiEmptyState>
 
-    <div v-else-if="fetchError" class="rounded-lg border border-rose-900 bg-rose-950/40 p-4 text-sm text-rose-300">
+    <div v-else-if="fetchError" class="rounded-lg border border-down bg-down-tint p-4 text-sm text-down">
       {{ fetchError }}
     </div>
 
-    <div v-else-if="loading && !compareData" class="text-slate-500">Loading…</div>
+    <div v-else-if="loading && !compareData" class="text-tertiary">Loading…</div>
 
     <template v-else-if="compareData">
       <CompareSummaryTable :rows="compareData" />
 
-      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <CompareUptimeBar :rows="compareData" />
         <CompareLatencyBar :rows="compareData" />
       </div>

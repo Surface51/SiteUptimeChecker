@@ -4,9 +4,9 @@ import type { CheckStatus } from '#shared/types'
 defineProps<{ ticks: { checkedAt: string; status: CheckStatus }[] }>()
 
 const colorClass: Record<CheckStatus, string> = {
-  up: 'bg-emerald-500',
-  degraded: 'bg-amber-500',
-  down: 'bg-rose-500',
+  up: 'bg-up',
+  degraded: 'bg-degraded',
+  down: 'bg-down',
 }
 
 function formatTime(iso: string) {
@@ -24,5 +24,5 @@ function formatTime(iso: string) {
       :title="`${tick.status} — ${formatTime(tick.checkedAt)}`"
     />
   </div>
-  <div v-else class="text-xs text-slate-600">No checks yet</div>
+  <div v-else class="text-xs text-tertiary">No checks yet</div>
 </template>

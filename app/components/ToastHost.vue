@@ -1,11 +1,27 @@
 <script setup lang="ts">
 const { toasts, dismiss } = useToasts()
 
+// Flat by design: a bordered raised card with a status-colored left rule,
+// rather than a tinted fill plus shadow.
 const typeClasses: Record<string, string> = {
-  info: 'border-slate-700 bg-slate-900 text-slate-200',
-  success: 'border-emerald-800 bg-emerald-950/80 text-emerald-200',
-  warning: 'border-amber-800 bg-amber-950/80 text-amber-200',
-  error: 'border-rose-800 bg-rose-950/80 text-rose-200',
+  info: 'border-l-maint',
+  success: 'border-l-up',
+  warning: 'border-l-degraded',
+  error: 'border-l-down',
+}
+
+const typeIcons: Record<string, string> = {
+  info: 'info',
+  success: 'check_circle',
+  warning: 'warning',
+  error: 'error',
+}
+
+const iconColors: Record<string, string> = {
+  info: 'text-maint',
+  success: 'text-up',
+  warning: 'text-degraded',
+  error: 'text-down',
 }
 </script>
 
@@ -15,11 +31,19 @@ const typeClasses: Record<string, string> = {
       <div
         v-for="t in toasts"
         :key="t.id"
-        class="pointer-events-auto flex w-full max-w-sm items-start gap-2 rounded-lg border px-3 py-2.5 text-sm shadow-lg"
+        class="pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-md border border-l-4 border-border-default bg-raised px-4 py-3 text-sm text-primary"
         :class="typeClasses[t.type]"
       >
+        <UiIcon :name="typeIcons[t.type] ?? 'info'" :size="18" :class="iconColors[t.type]" class="shrink-0" />
         <span class="min-w-0 flex-1">{{ t.message }}</span>
-        <button type="button" class="shrink-0 text-xs opacity-60 hover:opacity-100" @click="dismiss(t.id)">✕</button>
+        <button
+          type="button"
+          class="shrink-0 cursor-pointer text-tertiary transition-colors hover:text-primary"
+          aria-label="Dismiss"
+          @click="dismiss(t.id)"
+        >
+          <UiIcon name="close" :size="16" />
+        </button>
       </div>
     </TransitionGroup>
   </div>

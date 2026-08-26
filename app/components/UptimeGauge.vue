@@ -14,14 +14,14 @@ const option = computed<EChartsOption>(() => ({
       radius: '95%',
       center: ['50%', '65%'],
       progress: { show: true, width: 7 },
-      itemStyle: { color: chartColors.sky },
+      itemStyle: { color: chartColors.primary },
       axisLine: {
         lineStyle: {
           width: 7,
           color: [
-            [0.95, chartColors.rose],
-            [0.99, chartColors.amber],
-            [1, chartColors.emerald],
+            [0.95, chartColors.down],
+            [0.99, chartColors.degraded],
+            [1, chartColors.up],
           ],
         },
       },
@@ -46,11 +46,11 @@ const option = computed<EChartsOption>(() => ({
 </script>
 
 <template>
-  <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-2">
-    <div class="px-2 pt-2 text-xs text-slate-500">{{ label }}</div>
+  <UiCard padding="p-3">
+    <div class="px-1 text-xs text-tertiary">{{ label }}</div>
     <div v-if="value !== null" class="h-24">
       <BaseChart :option="option" />
     </div>
-    <div v-else class="flex h-24 items-center justify-center text-2xl font-semibold text-slate-100">—</div>
-  </div>
+    <div v-else class="flex h-24 items-center justify-center font-display text-2xl font-bold text-primary">—</div>
+  </UiCard>
 </template>

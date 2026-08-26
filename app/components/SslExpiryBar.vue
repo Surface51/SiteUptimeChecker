@@ -23,9 +23,9 @@ const ranked = computed(() => {
 })
 
 function colorFor(days: number): string {
-  if (days < 7) return chartColors.rose
-  if (days < 30) return chartColors.amber
-  return chartColors.emerald
+  if (days < 7) return chartColors.down
+  if (days < 30) return chartColors.degraded
+  return chartColors.up
 }
 
 const option = computed<EChartsOption>(() => ({
@@ -42,6 +42,7 @@ const option = computed<EChartsOption>(() => ({
     {
       type: 'bar',
       barMaxWidth: 14,
+      itemStyle: { borderRadius: 999 },
       data: ranked.value.map((r) => ({ value: r.value, siteId: r.id, itemStyle: { color: colorFor(r.value) } })),
       label: { show: true, position: 'right', formatter: '{c}d', color: chartColors.textStrong, fontSize: 11 },
     },
@@ -55,11 +56,11 @@ function onClick(params: any) {
 </script>
 
 <template>
-  <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-    <h2 class="mb-3 text-sm font-medium text-slate-200">SSL expiry</h2>
+  <UiCard>
+    <UiSectionHeading class="mb-4">SSL expiry</UiSectionHeading>
     <div v-if="ranked.length" :style="{ height: `${Math.max(120, ranked.length * 28)}px` }">
       <BaseChart :option="option" class="cursor-pointer" @click="onClick" />
     </div>
-    <div v-else class="flex h-24 items-center justify-center text-sm text-slate-600">No SSL data yet</div>
-  </div>
+    <div v-else class="flex h-24 items-center justify-center text-sm text-tertiary">No SSL data yet</div>
+  </UiCard>
 </template>

@@ -1,11 +1,31 @@
 import type { NotificationType } from '#shared/types'
 
+/** Material Symbols ligature names — rendered via <UiIcon>. */
 export const notificationTypeIcon: Record<NotificationType, string> = {
-  down: '🔴',
-  up: '🟢',
-  degraded: '🟡',
-  ssl_expiring: '🔒',
-  lighthouse_regression: '📉',
+  down: 'error',
+  up: 'check_circle',
+  degraded: 'speed',
+  ssl_expiring: 'lock',
+  lighthouse_regression: 'trending_down',
+}
+
+/** Status tone per notification type, driving the tinted icon circles. */
+export const notificationTypeTone: Record<NotificationType, 'up' | 'down' | 'degraded' | 'maint'> = {
+  down: 'down',
+  up: 'up',
+  degraded: 'degraded',
+  ssl_expiring: 'degraded',
+  lighthouse_regression: 'maint',
+}
+
+/** Written out in full — Tailwind only sees complete class strings, so these
+    can't be built by interpolating the tone name. */
+export const notificationToneClass: Record<NotificationType, string> = {
+  down: 'bg-down-tint text-down',
+  up: 'bg-up-tint text-up',
+  degraded: 'bg-degraded-tint text-degraded',
+  ssl_expiring: 'bg-degraded-tint text-degraded',
+  lighthouse_regression: 'bg-maint-tint text-maint',
 }
 
 export const notificationTypeLabel: Record<NotificationType, string> = {

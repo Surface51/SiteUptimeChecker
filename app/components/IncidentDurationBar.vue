@@ -33,7 +33,7 @@ const option = computed<EChartsOption>(() => ({
     {
       type: 'bar',
       barMaxWidth: 20,
-      itemStyle: { color: chartColors.rose },
+      itemStyle: { color: chartColors.down, borderRadius: [999, 999, 0, 0] },
       data: closed.value.map((i) => [parseDbTime(i.startedAt), i.durationSeconds]),
     },
   ],

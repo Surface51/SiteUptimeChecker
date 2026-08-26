@@ -1,1 +1,193 @@
 @import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Surface 51 design tokens.
+   Light values live on :root; dark mode overrides the semantic layer only —
+   the raw scales (red-*, gray-*) never change.
+   --------------------------------------------------------------------------- */
+:root {
+  --red-50: #fdecea;
+  --red-100: #fbd5d1;
+  --red-300: #f0847c;
+  --red-500: #e4312b;
+  --red-600: #c92620;
+  --red-700: #a31e19;
+  --red-900: #4a0e0b;
+
+  --gray-0: #ffffff;
+  --gray-50: #f7f7f7;
+  --gray-100: #ededed;
+  --gray-200: #dcdcdc;
+  --gray-300: #b8b8b8;
+  --gray-400: #8f8f8f;
+  --gray-600: #5c5c5c;
+  --gray-800: #262626;
+  --gray-900: #121212;
+  --black: #000000;
+  --white: #ffffff;
+
+  --surface-page: var(--white);
+  --surface-raised: var(--white);
+  --surface-sunken: var(--gray-50);
+  --surface-inverse: var(--black);
+
+  --border-default: var(--gray-200);
+  --border-strong: var(--black);
+
+  --text-primary: var(--black);
+  --text-secondary: var(--gray-600);
+  --text-tertiary: var(--gray-400);
+  --text-inverse: var(--white);
+
+  --accent: var(--red-500);
+  --accent-hover: var(--red-600);
+  --accent-active: var(--red-700);
+  --accent-tint: var(--red-50);
+  --accent-text: var(--white);
+  --focus-ring: var(--red-500);
+
+  /* Status semantics. The mock defines three (up/degraded/down); the app also
+     needs maintenance (informational) and neutral (unknown/paused). */
+  --status-up: #2f8f4e;
+  --status-up-tint: #eaf6ee;
+  --status-degraded: #a86a0e; /* darkened from the mock's #c07a12 for AA text contrast on white */
+  --status-degraded-tint: #fdf0dd;
+  --status-down: var(--red-500);
+  --status-down-tint: var(--red-50);
+  --status-maint: #4a70a8;
+  --status-maint-tint: #e9eff7;
+  --status-neutral: var(--gray-400);
+  --status-neutral-tint: var(--gray-100);
+
+  --font-display: 'Barlow Semi Condensed', sans-serif;
+  --font-body: 'Barlow', -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0.08em;
+
+  --ease-snappy: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --duration-fast: 100ms;
+  --duration-base: 150ms;
+}
+
+[data-theme="dark"] {
+  --surface-page: var(--black);
+  --surface-raised: #0a0a0a;
+  --surface-sunken: var(--gray-900);
+  --surface-inverse: var(--white);
+
+  --border-default: var(--gray-800);
+  --border-strong: var(--white);
+
+  --text-primary: var(--white);
+  --text-secondary: var(--gray-400);
+  --text-tertiary: var(--gray-600);
+  --text-inverse: var(--black);
+
+  --accent: var(--red-500);
+  --accent-hover: #f0473f;
+  --accent-active: var(--red-300);
+  --accent-tint: #2a0f0d;
+  --accent-text: var(--white);
+  --focus-ring: var(--red-500);
+
+  --status-up: #48b06c;
+  --status-up-tint: #0d1f13;
+  --status-degraded: #d98f1f;
+  --status-degraded-tint: #241a08;
+  --status-down: #f0473f;
+  --status-down-tint: #2a0f0d;
+  --status-maint: #7d9cc4;
+  --status-maint-tint: #101822;
+  --status-neutral: var(--gray-600);
+  --status-neutral-tint: var(--gray-900);
+}
+
+/* ---------------------------------------------------------------------------
+   Tailwind v4 theme mapping.
+   `inline` is load-bearing: without it utilities bake in the value the token had
+   at build time and stop tracking the runtime [data-theme] flip.
+   --------------------------------------------------------------------------- */
+@theme inline {
+  --color-page: var(--surface-page);
+  --color-raised: var(--surface-raised);
+  --color-sunken: var(--surface-sunken);
+  --color-inverse: var(--surface-inverse);
+
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-tertiary: var(--text-tertiary);
+  --color-on-inverse: var(--text-inverse);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-tint: var(--accent-tint);
+  --color-accent-text: var(--accent-text);
+
+  --color-up: var(--status-up);
+  --color-up-tint: var(--status-up-tint);
+  --color-degraded: var(--status-degraded);
+  --color-degraded-tint: var(--status-degraded-tint);
+  --color-down: var(--status-down);
+  --color-down-tint: var(--status-down-tint);
+  --color-maint: var(--status-maint);
+  --color-maint-tint: var(--status-maint-tint);
+  --color-neutral: var(--status-neutral);
+  --color-neutral-tint: var(--status-neutral-tint);
+
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+
+  --text-4xl: 3rem;
+  --text-5xl: 4rem;
+
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.08em;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+
+  --ease-snappy: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+    background: var(--surface-page);
+    color: var(--text-primary);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-text);
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--gray-300);
+    border-radius: 999px;
+  }
+
+  .material-symbols-outlined {
+    font-variation-settings: 'opsz' 20, 'wght' 400, 'FILL' 0, 'GRAD' 0;
+    line-height: 1;
+    user-select: none;
+  }
+}

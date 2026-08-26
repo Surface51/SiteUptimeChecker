@@ -127,10 +127,10 @@ function formatMs(v: number | null | undefined) {
   return v == null ? '—' : `${Math.round(v)} ms`
 }
 function performanceColor(p: number | null) {
-  if (p === null) return 'bg-slate-800/60 text-slate-500'
-  if (p >= 90) return 'bg-emerald-900/40 text-emerald-300'
-  if (p >= 50) return 'bg-amber-900/40 text-amber-300'
-  return 'bg-rose-900/40 text-rose-300'
+  if (p === null) return 'bg-sunken text-tertiary'
+  if (p >= 90) return 'bg-up-tint text-up'
+  if (p >= 50) return 'bg-degraded-tint text-degraded'
+  return 'bg-down-tint text-down'
 }
 
 function formatRelative(iso: string | undefined | null) {
@@ -176,83 +176,86 @@ async function runLighthouseNow(site: SiteSummary) {
 </script>
 
 <template>
-  <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/50">
+  <div class="overflow-x-auto rounded-lg border border-border-default bg-raised">
     <table class="w-full min-w-[820px] border-collapse text-sm">
       <thead>
-        <tr class="border-b border-slate-800 text-left text-xs text-slate-500">
+        <tr class="border-b border-border-default text-left">
           <th
             v-for="col in columns"
             :key="col.key"
-            class="cursor-pointer select-none whitespace-nowrap px-4 py-2.5 font-medium hover:text-slate-300"
+            class="cursor-pointer px-4 py-3.5 text-xs font-semibold tracking-wide whitespace-nowrap text-tertiary uppercase select-none transition-colors hover:text-primary"
             :class="col.align === 'right' ? 'text-right' : 'text-left'"
             @click="setSort(col.key)"
           >
             <span class="inline-flex items-center gap-1" :class="col.align === 'right' ? 'flex-row-reverse' : ''">
               {{ col.label }}
-              <span v-if="sortKey === col.key" class="text-slate-400">{{ sortDir === 'asc' ? '▲' : '▼' }}</span>
+              <span v-if="sortKey === col.key" class="text-accent">{{ sortDir === 'asc' ? '▲' : '▼' }}</span>
             </span>
           </th>
-          <th class="px-4 py-2.5" />
+          <th class="px-4 py-3.5" />
         </tr>
       </thead>
       <tbody>
         <tr
           v-for="site in sortedSites"
           :key="site.id"
-          class="cursor-pointer border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40"
+          class="cursor-pointer border-b border-border-default transition-colors last:border-0 hover:bg-sunken"
           @click="$router.push(`/sites/${site.id}`)"
         >
-          <td class="px-4 py-2.5">
-            <div class="font-medium text-slate-100">{{ site.name || hostnameOf(site.url) }}</div>
-            <div class="truncate text-xs text-slate-500">{{ hostnameOf(site.url) }}</div>
-            <div v-if="site.tags.length" class="mt-1 flex flex-wrap gap-1">
+          <td class="px-4 py-3.5">
+            <div class="font-medium text-primary">{{ site.name || hostnameOf(site.url) }}</div>
+            <div class="truncate text-xs text-tertiary">{{ hostnameOf(site.url) }}</div>
+            <div v-if="site.tags.length" class="mt-1.5 flex flex-wrap gap-1">
               <span
                 v-for="tag in site.tags"
                 :key="tag"
-                class="rounded-full bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-400"
+                class="rounded-full bg-sunken px-2 py-0.5 text-[10px] font-semibold text-secondary"
               >
                 {{ tag }}
               </span>
             </div>
           </td>
-          <td class="px-4 py-2.5">
-            <StatusBadge :status="site.latestCheck?.status ?? null" />
+          <td class="px-4 py-3.5">
+            <StatusBadge
+              :status="site.latestCheck?.status ?? null"
+              :state="!site.enabled ? 'paused' : undefined"
+            />
           </td>
-          <td class="px-4 py-2.5 text-right text-slate-300">{{ formatPct(site.uptime24h) }}</td>
-          <td class="px-4 py-2.5 text-right text-slate-300">{{ formatPct(site.uptime7d) }}</td>
-          <td class="px-4 py-2.5 text-right text-slate-300">{{ formatMs(site.latestCheck?.timeTotal) }}</td>
-          <td class="px-4 py-2.5 text-right">
+          <td class="px-4 py-3.5 text-right text-secondary">{{ formatPct(site.uptime24h) }}</td>
+          <td class="px-4 py-3.5 text-right text-secondary">{{ formatPct(site.uptime7d) }}</td>
+          <td class="px-4 py-3.5 text-right text-secondary">{{ formatMs(site.latestCheck?.timeTotal) }}</td>
+          <td class="px-4 py-3.5 text-right">
             <span
               v-if="site.latestPerformance !== null"
-              class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+              class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
               :class="performanceColor(site.latestPerformance)"
             >
               {{ site.latestPerformance }}
             </span>
-            <span v-else class="text-slate-500">—</span>
+            <span v-else class="text-tertiary">—</span>
           </td>
-          <td class="px-4 py-2.5 text-right">
+          <td class="px-4 py-3.5 text-right">
             <span
               v-if="site.latestPerformanceDesktop !== null"
-              class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+              class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
               :class="performanceColor(site.latestPerformanceDesktop)"
             >
               {{ site.latestPerformanceDesktop }}
             </span>
-            <span v-else class="text-slate-500">—</span>
+            <span v-else class="text-tertiary">—</span>
           </td>
           <td
-            class="px-4 py-2.5 text-right"
-            :class="(site.latestCheck?.sslDaysRemaining ?? 999) < 14 ? 'text-amber-300' : 'text-slate-300'"
+            class="px-4 py-3.5 text-right"
+            :class="(site.latestCheck?.sslDaysRemaining ?? 999) < 14 ? 'font-medium text-degraded' : 'text-secondary'"
           >
             {{ site.latestCheck?.sslDaysRemaining ?? '—' }}
           </td>
-          <td class="px-4 py-2.5 text-right text-slate-500">{{ formatRelative(site.latestCheck?.checkedAt) }}</td>
-          <td class="px-4 py-2.5 text-right">
+          <td class="px-4 py-3.5 text-right text-tertiary">{{ formatRelative(site.latestCheck?.checkedAt) }}</td>
+          <td class="px-4 py-3.5 text-right">
             <div class="relative inline-block text-left" @click.stop>
               <button
                 type="button"
-                class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                class="cursor-pointer rounded-full border border-border-default px-3 py-1 text-xs font-medium text-secondary transition-colors hover:bg-inverse hover:text-on-inverse"
                 @click="toggleMenu(site.id)"
               >
                 Actions ▾
@@ -262,12 +265,12 @@ async function runLighthouseNow(site: SiteSummary) {
 
               <div
                 v-if="openMenuId === site.id"
-                class="absolute right-0 z-20 mt-1 w-44 rounded-md border border-slate-800 bg-slate-900 py-1 shadow-xl"
+                class="absolute right-0 z-20 mt-1.5 w-48 overflow-hidden rounded-md border border-border-default bg-raised py-1"
               >
                 <button
                   type="button"
                   :disabled="checkingId === site.id"
-                  class="block w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                  class="block w-full cursor-pointer px-3.5 py-2 text-left text-xs text-secondary transition-colors hover:bg-sunken hover:text-primary disabled:opacity-50"
                   @click="checkNow(site)"
                 >
                   {{ checkingId === site.id ? 'Checking…' : 'Check now' }}
@@ -275,15 +278,15 @@ async function runLighthouseNow(site: SiteSummary) {
                 <button
                   type="button"
                   :disabled="runningLighthouseId === site.id"
-                  class="block w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+                  class="block w-full cursor-pointer px-3.5 py-2 text-left text-xs text-secondary transition-colors hover:bg-sunken hover:text-primary disabled:opacity-50"
                   @click="runLighthouseNow(site)"
                 >
                   {{ runningLighthouseId === site.id ? 'Running…' : 'Run Lighthouse now' }}
                 </button>
-                <div class="my-1 border-t border-slate-800" />
+                <div class="my-1 border-t border-border-default" />
                 <button
                   type="button"
-                  class="block w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-rose-950/60 hover:text-rose-300"
+                  class="block w-full cursor-pointer px-3.5 py-2 text-left text-xs text-down transition-colors hover:bg-down-tint"
                   @click="remove(site)"
                 >
                   Remove

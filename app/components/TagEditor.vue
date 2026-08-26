@@ -81,19 +81,20 @@ function isActive(tag: string) {
     <span
       v-for="tag in tags"
       :key="tag"
-      class="group/tag inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium transition-colors"
-      :class="isActive(tag) ? 'bg-emerald-900/50 text-emerald-300' : 'bg-slate-800 text-slate-300'"
+      class="group/tag inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold transition-colors duration-100 ease-snappy"
+      :class="isActive(tag) ? 'bg-accent text-accent-text' : 'bg-sunken text-secondary'"
     >
       <button
         type="button"
-        class="hover:underline"
+        class="cursor-pointer hover:underline"
         @click.stop.prevent="emit('toggle-filter', tag)"
       >
         {{ tag }}
       </button>
       <button
         type="button"
-        class="text-slate-500 opacity-0 hover:text-rose-300 group-hover/tag:opacity-100"
+        class="cursor-pointer opacity-0 transition-opacity group-hover/tag:opacity-100"
+        :class="isActive(tag) ? 'hover:text-white' : 'text-tertiary hover:text-down'"
         :disabled="busy"
         :aria-label="`Remove tag ${tag}`"
         @click.stop.prevent="removeTag(tag)"
@@ -110,7 +111,7 @@ function isActive(tag: string) {
         maxlength="30"
         placeholder="tag name"
         :list="datalistId"
-        class="w-24 rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
+        class="w-24 rounded-full border border-border-default bg-raised px-2.5 py-1 text-primary outline-none placeholder:text-tertiary focus:border-border-strong"
         @keydown.esc.stop.prevent="cancelAdd"
         @blur="submitAdd"
       />
@@ -121,7 +122,7 @@ function isActive(tag: string) {
     <button
       v-else
       type="button"
-      class="rounded-full border border-dashed border-slate-700 px-2 py-0.5 text-slate-500 hover:border-slate-500 hover:text-slate-300"
+      class="cursor-pointer rounded-full border border-dashed border-border-default px-2.5 py-1 text-tertiary transition-colors hover:border-border-strong hover:text-primary"
       @click.stop.prevent="startAdd"
     >
       + Tag

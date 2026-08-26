@@ -38,12 +38,18 @@ const segmentLabels: Record<(typeof segments)[number], string> = {
   wait: 'Wait (TTFB)',
   download: 'Download',
 }
-const segmentColors = [chartColors.sky, chartColors.emerald, chartColors.amber, chartColors.rose, chartColors.slate]
+// Neutral ramp with the accent on the dominant phase, matching the design system's
+// connection-phase breakdown. Read inside the computed so it tracks theme changes.
+function segmentColors() {
+  return [chartColors.extra2, chartColors.extra1, chartColors.primary, chartColors.accent, chartColors.maint]
+}
 
 const labels = computed(() => props.rows.map((r) => r.site.name || hostname(r)))
 const durations = computed(() => props.rows.map(phaseDurations))
 
-const option = computed<EChartsOption>(() => ({
+const option = computed<EChartsOption>(() => {
+  const colors = segmentColors()
+  return {
   grid: { left: 56, right: 16, top: 32, bottom: 40, containLabel: true },
   legend: { top: 0, textStyle: { fontSize: 11 } },
   tooltip: {
@@ -57,18 +63,19 @@ const option = computed<EChartsOption>(() => ({
     type: 'bar',
     stack: 'total',
     barMaxWidth: 32,
-    itemStyle: { color: segmentColors[i] },
+    itemStyle: { color: colors[i] },
     data: durations.value.map((d) => d[key]),
   })),
-}))
+  }
+})
 </script>
 
 <template>
-  <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-    <h2 class="mb-3 text-sm font-medium text-slate-200">Latency breakdown (avg)</h2>
+  <UiCard>
+    <UiSectionHeading class="mb-4">Latency breakdown (avg)</UiSectionHeading>
     <div v-if="rows.length" class="h-64">
       <BaseChart :option="option" />
     </div>
-    <div v-else class="flex h-64 items-center justify-center text-sm text-slate-600">No data</div>
-  </div>
+    <div v-else class="flex h-64 items-center justify-center text-sm text-tertiary">No data</div>
+  </UiCard>
 </template>

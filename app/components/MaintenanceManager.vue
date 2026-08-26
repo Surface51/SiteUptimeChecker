@@ -63,65 +63,39 @@ async function remove(id: number) {
 </script>
 
 <template>
-  <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-    <h2 class="mb-3 text-sm font-medium text-slate-200">Maintenance windows</h2>
+  <UiCard>
+    <UiSectionHeading as="h3" class="mb-4">Maintenance windows</UiSectionHeading>
 
-    <form class="flex flex-col gap-3 sm:flex-row sm:items-end" @submit.prevent="add">
+    <form class="flex flex-col gap-4 sm:flex-row sm:items-end" @submit.prevent="add">
+      <div class="flex-1"><UiInput v-model="startsAt" label="Starts" type="datetime-local" /></div>
+      <div class="flex-1"><UiInput v-model="endsAt" label="Ends" type="datetime-local" /></div>
       <div class="flex-1">
-        <label class="mb-1 block text-xs text-slate-500">Starts</label>
-        <input
-          v-model="startsAt"
-          type="datetime-local"
-          required
-          class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
-        />
+        <UiInput v-model="reason" label="Reason (optional)" placeholder="Scheduled deploy" />
       </div>
-      <div class="flex-1">
-        <label class="mb-1 block text-xs text-slate-500">Ends</label>
-        <input
-          v-model="endsAt"
-          type="datetime-local"
-          required
-          class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
-        />
-      </div>
-      <div class="flex-1">
-        <label class="mb-1 block text-xs text-slate-500">Reason (optional)</label>
-        <input
-          v-model="reason"
-          type="text"
-          placeholder="Scheduled deploy"
-          class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:border-slate-500 focus:outline-none"
-        />
-      </div>
-      <button
-        type="submit"
-        :disabled="saving"
-        class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-      >
+      <UiButton type="submit" variant="primary" :disabled="saving">
         {{ saving ? 'Adding…' : 'Add' }}
-      </button>
+      </UiButton>
     </form>
-    <p v-if="errorMessage" class="mt-2 text-sm text-rose-400">{{ errorMessage }}</p>
+    <p v-if="errorMessage" class="mt-3 text-sm text-down">{{ errorMessage }}</p>
 
-    <div v-if="windows.length" class="mt-4 flex flex-col divide-y divide-slate-800 text-sm">
-      <div v-for="win in windows" :key="win.id" class="flex items-center justify-between gap-3 py-2">
+    <div v-if="windows.length" class="mt-5 flex flex-col divide-y divide-border-default text-sm">
+      <div v-for="win in windows" :key="win.id" class="flex items-center justify-between gap-3 py-3">
         <div class="min-w-0">
-          <div class="text-slate-200">
-            {{ formatTime(win.startsAt) }} <span class="text-slate-500">→</span> {{ formatTime(win.endsAt) }}
-            <span v-if="isActive(win)" class="ml-1.5 rounded-full bg-sky-900/40 px-2 py-0.5 text-[11px] font-medium text-sky-300">Active</span>
+          <div class="flex flex-wrap items-center gap-2 text-primary">
+            <span>{{ formatTime(win.startsAt) }} <span class="text-tertiary">→</span> {{ formatTime(win.endsAt) }}</span>
+            <UiBadge v-if="isActive(win)" tone="maint">Active</UiBadge>
           </div>
-          <div v-if="win.reason" class="truncate text-xs text-slate-500">{{ win.reason }}</div>
+          <div v-if="win.reason" class="mt-0.5 truncate text-xs text-tertiary">{{ win.reason }}</div>
         </div>
         <button
           type="button"
-          class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-rose-950/60 hover:text-rose-300"
+          class="cursor-pointer rounded-full border border-border-default px-3 py-1 text-xs font-medium text-secondary transition-colors hover:border-down hover:bg-down hover:text-white"
           @click="remove(win.id)"
         >
           Remove
         </button>
       </div>
     </div>
-    <p v-else-if="!pending" class="mt-3 text-sm text-slate-500">No maintenance windows scheduled.</p>
-  </div>
+    <p v-else-if="!pending" class="mt-4 text-sm text-tertiary">No maintenance windows scheduled.</p>
+  </UiCard>
 </template>

@@ -24,15 +24,15 @@ const radarOption = computed<EChartsOption>(() => ({
     indicator: CATEGORIES.map((c) => ({ name: c.label, max: 100 })),
     axisName: { color: chartColors.text, fontSize: 10 },
     splitLine: { lineStyle: { color: chartColors.axisLine } },
-    splitArea: { areaStyle: { color: ['rgba(30,41,59,0.15)', 'rgba(30,41,59,0.3)'] } },
+    splitArea: { show: false },
     axisLine: { lineStyle: { color: chartColors.axisLine } },
   },
   series: [
     {
       type: 'radar',
-      areaStyle: { opacity: 0.25 },
-      lineStyle: { color: chartColors.sky },
-      itemStyle: { color: chartColors.sky },
+      areaStyle: { opacity: 0.15 },
+      lineStyle: { color: chartColors.accent },
+      itemStyle: { color: chartColors.accent },
       data: [
         {
           name: 'Latest scores',
@@ -54,7 +54,7 @@ const trendOption = computed<EChartsOption>(() => ({
     type: 'line',
     showSymbol: false,
     connectNulls: true,
-    color: [chartColors.sky, chartColors.emerald, chartColors.amber, chartColors.rose][i],
+    color: [chartColors.primary, chartColors.accent, chartColors.up, chartColors.maint][i],
     data: props.points.filter((p) => !p.error).map((p) => [parseDbTime(p.measuredAt), p[c.key]]),
   })),
 }))
@@ -69,5 +69,5 @@ const trendOption = computed<EChartsOption>(() => ({
       <BaseChart :option="trendOption" />
     </div>
   </div>
-  <div v-else class="flex h-56 items-center justify-center text-sm text-slate-600">No history in this range</div>
+  <div v-else class="flex h-56 items-center justify-center text-sm text-tertiary">No history in this range</div>
 </template>

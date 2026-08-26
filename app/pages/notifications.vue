@@ -5,6 +5,16 @@ useHead({ title: 'Notifications — Site Uptime' })
 
 const { sites } = useSites()
 
+// These three actions used to live in the header's NotificationBell dropdown,
+// which the sidebar redesign replaced with a plain unread badge.
+const {
+  markAllRead,
+  dismissAll,
+  desktopEnabled,
+  enableDesktopNotifications,
+  disableDesktopNotifications,
+} = useNotifications()
+
 const TYPE_OPTIONS: { label: string; value: NotificationType | '' }[] = [
   { label: 'All types', value: '' },
   { label: 'Down', value: 'down' },
@@ -43,90 +53,101 @@ async function onNotificationClick(n: NotificationRow) {
   }
   await navigateTo(`/sites/${n.siteId}`)
 }
+
+async function onMarkAllRead() {
+  await markAllRead()
+  await refresh()
+}
+
+async function onClearAll() {
+  await dismissAll()
+  await refresh()
+}
+
+function toggleDesktop() {
+  if (desktopEnabled.value) disableDesktopNotifications()
+  else enableDesktopNotifications()
+}
 </script>
 
 <template>
-  <div class="flex flex-col gap-6">
-    <div class="flex items-center justify-between">
+  <div class="flex flex-col gap-9">
+    <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 class="text-lg font-semibold text-slate-100">Notifications</h1>
-        <p class="text-sm text-slate-500">Full history across all monitored sites.</p>
+        <h1 class="font-display text-4xl font-bold tracking-tight text-primary">Notifications</h1>
+        <p class="mt-1.5 text-base text-secondary">Full history across all monitored sites.</p>
       </div>
-      <NuxtLink to="/" class="text-sm text-slate-500 hover:text-slate-300">← Back to dashboard</NuxtLink>
+      <div class="flex flex-wrap gap-2.5">
+        <UiButton
+          variant="ghost"
+          :icon="desktopEnabled ? 'notifications_active' : 'notifications_off'"
+          @click="toggleDesktop"
+        >
+          {{ desktopEnabled ? 'Desktop on' : 'Enable desktop' }}
+        </UiButton>
+        <UiButton variant="ghost" icon="clear_all" @click="onClearAll">Clear</UiButton>
+        <UiButton variant="secondary" icon="done_all" @click="onMarkAllRead">Mark all read</UiButton>
+      </div>
     </div>
 
-    <div class="flex flex-wrap gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-      <div>
-        <label class="mb-1 block text-xs text-slate-500">Site</label>
-        <select
-          v-model="siteId"
-          class="rounded-md border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
-        >
-          <option value="">All sites</option>
-          <option v-for="s in sites" :key="s.id" :value="s.id">{{ s.name || s.url }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="mb-1 block text-xs text-slate-500">Type</label>
-        <select
-          v-model="type"
-          class="rounded-md border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-slate-500 focus:outline-none"
-        >
-          <option v-for="opt in TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="mb-1 block text-xs text-slate-500">Status</label>
-        <div class="flex gap-1 rounded-md border border-slate-800 p-0.5 text-xs">
-          <button
-            v-for="opt in READ_OPTIONS"
-            :key="opt.value"
-            type="button"
-            class="rounded px-2.5 py-1"
-            :class="readFilter === opt.value ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
-            @click="readFilter = opt.value"
-          >
-            {{ opt.label }}
-          </button>
+    <UiCard>
+      <div class="flex flex-wrap items-end gap-4">
+        <div class="w-52">
+          <UiSelect
+            v-model="siteId"
+            label="Site"
+            :options="[
+              { label: 'All sites', value: '' },
+              ...sites.map((s) => ({ label: s.name || s.url, value: s.id })),
+            ]"
+          />
+        </div>
+        <div class="w-52">
+          <UiSelect v-model="type" label="Type" :options="TYPE_OPTIONS" />
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <span class="text-sm font-medium text-secondary">Status</span>
+          <UiSegmentedControl v-model="readFilter" :options="READ_OPTIONS" />
+        </div>
+        <div class="ml-auto">
+          <UiButton variant="ghost" icon="refresh" @click="() => refresh()">Refresh</UiButton>
         </div>
       </div>
-      <div class="ml-auto self-end">
-        <button
-          type="button"
-          class="rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
-          @click="() => refresh()"
-        >
-          Refresh
-        </button>
-      </div>
-    </div>
+    </UiCard>
 
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50">
-      <div v-if="pending && !notifications.length" class="p-8 text-center text-sm text-slate-500">Loading…</div>
-      <div v-else-if="!notifications.length" class="p-8 text-center text-sm text-slate-500">
+    <div class="overflow-hidden rounded-lg border border-border-default bg-raised">
+      <div v-if="pending && !notifications.length" class="p-10 text-center text-sm text-tertiary">Loading…</div>
+      <div v-else-if="!notifications.length" class="p-10 text-center text-sm text-tertiary">
         No notifications match these filters.
       </div>
       <button
         v-for="n in notifications"
         :key="n.id"
         type="button"
-        class="flex w-full items-start gap-3 border-b border-slate-800/60 px-4 py-3 text-left last:border-0 hover:bg-slate-800/40"
-        :class="n.read ? 'opacity-70' : ''"
+        class="flex w-full cursor-pointer items-center gap-3.5 border-b border-border-default px-6 py-4.5 text-left transition-colors last:border-0 hover:bg-sunken"
+        :class="n.read ? 'bg-transparent' : 'bg-sunken'"
         @click="onNotificationClick(n)"
       >
-        <span class="mt-0.5 text-lg">{{ notificationTypeIcon[n.type] || '•' }}</span>
-        <div class="min-w-0 flex-1">
-          <div class="text-sm text-slate-200">{{ n.message }}</div>
-          <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+        <span
+          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+          :class="notificationToneClass[n.type]"
+        >
+          <UiIcon :name="notificationTypeIcon[n.type] || 'notifications'" :size="18" />
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="block text-sm text-primary" :class="n.read ? 'font-normal' : 'font-semibold'">
+            {{ n.message }}
+          </span>
+          <span class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-tertiary">
             <span>{{ n.siteName || n.siteUrl }}</span>
             <span>·</span>
             <span :title="formatAbsoluteTime(n.createdAt)">{{ formatRelativeTime(n.createdAt) }}</span>
-            <span v-if="n.dismissed" class="rounded-full bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">
+            <span v-if="n.dismissed" class="rounded-full bg-sunken px-2 py-0.5 text-[10px] text-secondary">
               Cleared
             </span>
-          </div>
-        </div>
-        <span v-if="!n.read" class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-sky-400" />
+          </span>
+        </span>
+        <span v-if="!n.read" class="h-2 w-2 shrink-0 rounded-full bg-accent" />
       </button>
     </div>
   </div>

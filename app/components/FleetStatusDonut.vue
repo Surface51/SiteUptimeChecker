@@ -10,10 +10,10 @@ const counts = computed(() => {
   const down = props.sites.filter((s) => s.enabled && s.latestCheck?.status === 'down').length
   const paused = props.sites.filter((s) => !s.enabled).length
   return [
-    { name: 'Up', value: up, color: chartColors.emerald },
-    { name: 'Degraded', value: degraded, color: chartColors.amber },
-    { name: 'Down', value: down, color: chartColors.rose },
-    { name: 'Paused', value: paused, color: chartColors.slate },
+    { name: 'Up', value: up, color: chartColors.up },
+    { name: 'Degraded', value: degraded, color: chartColors.degraded },
+    { name: 'Down', value: down, color: chartColors.down },
+    { name: 'Paused', value: paused, color: chartColors.neutral },
   ].filter((d) => d.value > 0)
 })
 
@@ -27,7 +27,7 @@ const option = computed<EChartsOption>(() => ({
       avoidLabelOverlap: false,
       label: { show: false },
       labelLine: { show: false },
-      itemStyle: { borderColor: '#0f172a', borderWidth: 2 },
+      itemStyle: { borderColor: chartColors.tooltipBg, borderWidth: 2 },
       data: counts.value.map((c) => ({ name: c.name, value: c.value, itemStyle: { color: c.color } })),
     },
   ],
@@ -35,20 +35,20 @@ const option = computed<EChartsOption>(() => ({
 </script>
 
 <template>
-  <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-    <div class="text-xs text-slate-500">Fleet status</div>
-    <div v-if="sites.length" class="flex items-center gap-3">
+  <UiCard padding="p-5">
+    <div class="mb-2 text-xs tracking-wide text-tertiary uppercase">Fleet status</div>
+    <div v-if="sites.length" class="flex items-center gap-4">
       <div class="h-24 w-24 shrink-0">
         <BaseChart :option="option" />
       </div>
-      <ul class="flex flex-col gap-1 text-xs">
-        <li v-for="c in counts" :key="c.name" class="flex items-center gap-1.5">
+      <ul class="flex flex-col gap-1.5 text-sm">
+        <li v-for="c in counts" :key="c.name" class="flex items-center gap-2">
           <span class="h-2 w-2 rounded-full" :style="{ backgroundColor: c.color }" />
-          <span class="text-slate-400">{{ c.name }}</span>
-          <span class="font-medium text-slate-200">{{ c.value }}</span>
+          <span class="text-secondary">{{ c.name }}</span>
+          <span class="font-medium text-primary">{{ c.value }}</span>
         </li>
       </ul>
     </div>
-    <div v-else class="flex h-24 items-center justify-center text-sm text-slate-600">No sites</div>
-  </div>
+    <div v-else class="flex h-24 items-center justify-center text-sm text-tertiary">No sites</div>
+  </UiCard>
 </template>

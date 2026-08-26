@@ -41,57 +41,52 @@ function formatTime(iso: string) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3">
-    <div class="flex items-center justify-between">
-      <div class="text-xs text-slate-500">
+  <div class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="text-xs text-tertiary">
         {{ latest ? `Last checked ${formatTime(latest.checkedAt)}` : 'No WHOIS data yet' }}
       </div>
-      <button
-        type="button"
-        :disabled="refreshing"
-        class="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
-        @click="refreshNow"
-      >
+      <UiButton variant="secondary" :disabled="refreshing" @click="refreshNow">
         {{ refreshing ? 'Checking…' : 'Refresh now' }}
-      </button>
+      </UiButton>
     </div>
 
-    <div v-if="latest && !latest.error" class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+    <div v-if="latest && !latest.error" class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
       <div>
-        <div class="text-xs text-slate-500">Registrar</div>
-        <div class="text-slate-200">{{ latest.registrar || '—' }}</div>
+        <div class="text-xs text-tertiary">Registrar</div>
+        <div class="text-primary">{{ latest.registrar || '—' }}</div>
       </div>
       <div>
-        <div class="text-xs text-slate-500">Expires</div>
-        <div class="text-slate-200">
-          <span :class="daysUntilExpiry !== null && daysUntilExpiry < 30 ? 'text-amber-300' : ''">
+        <div class="text-xs text-tertiary">Expires</div>
+        <div class="text-primary">
+          <span :class="daysUntilExpiry !== null && daysUntilExpiry < 30 ? 'font-medium text-degraded' : ''">
             {{ formatDate(latest.expiryDate) }}
           </span>
-          <span v-if="daysUntilExpiry !== null" class="text-xs text-slate-500">({{ daysUntilExpiry }}d)</span>
+          <span v-if="daysUntilExpiry !== null" class="text-xs text-tertiary">({{ daysUntilExpiry }}d)</span>
         </div>
       </div>
       <div>
-        <div class="text-xs text-slate-500">Created</div>
-        <div class="text-slate-200">{{ formatDate(latest.createdDate) }}</div>
+        <div class="text-xs text-tertiary">Created</div>
+        <div class="text-primary">{{ formatDate(latest.createdDate) }}</div>
       </div>
       <div>
-        <div class="text-xs text-slate-500">Updated</div>
-        <div class="text-slate-200">{{ formatDate(latest.updatedDate) }}</div>
+        <div class="text-xs text-tertiary">Updated</div>
+        <div class="text-primary">{{ formatDate(latest.updatedDate) }}</div>
       </div>
       <div class="sm:col-span-2">
-        <div class="text-xs text-slate-500">Name servers</div>
-        <div class="text-slate-200 break-words">{{ latest.nameServers.length ? latest.nameServers.join(', ') : '—' }}</div>
+        <div class="text-xs text-tertiary">Name servers</div>
+        <div class="break-words text-primary">{{ latest.nameServers.length ? latest.nameServers.join(', ') : '—' }}</div>
       </div>
       <div class="sm:col-span-2">
-        <div class="text-xs text-slate-500">Status</div>
-        <div class="text-slate-200 break-words">{{ latest.statuses.length ? latest.statuses.join(', ') : '—' }}</div>
+        <div class="text-xs text-tertiary">Status</div>
+        <div class="break-words text-primary">{{ latest.statuses.length ? latest.statuses.join(', ') : '—' }}</div>
       </div>
     </div>
 
-    <div v-else-if="latest?.error" class="text-xs text-rose-400">{{ latest.error }}</div>
+    <div v-else-if="latest?.error" class="text-xs text-down">{{ latest.error }}</div>
 
-    <div v-else class="rounded-xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-500">
+    <UiEmptyState v-else icon="travel_explore">
       No WHOIS data yet — click "Refresh now" to look it up.
-    </div>
+    </UiEmptyState>
   </div>
 </template>

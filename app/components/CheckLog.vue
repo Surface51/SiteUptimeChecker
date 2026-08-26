@@ -40,55 +40,51 @@ function toggleExpand(id: number) {
 </script>
 
 <template>
-  <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-    <div class="mb-3 flex items-center justify-between">
-      <h2 class="text-sm font-medium text-slate-200">Check log</h2>
-      <div class="flex gap-1 rounded-md border border-slate-800 p-0.5 text-xs">
-        <button
-          v-for="opt in [
-            { label: 'All', value: 'all' as const },
-            { label: 'Up', value: 'up' as const },
-            { label: 'Degraded', value: 'degraded' as const },
-            { label: 'Down', value: 'down' as const },
+  <UiCard>
+    <UiSectionHeading as="h3" class="mb-4">
+      Check log
+      <template #actions>
+        <UiSegmentedControl
+          v-model="statusFilter"
+          :options="[
+            { label: 'All', value: 'all' },
+            { label: 'Up', value: 'up' },
+            { label: 'Degraded', value: 'degraded' },
+            { label: 'Down', value: 'down' },
           ]"
-          :key="opt.value"
-          type="button"
-          class="rounded px-2 py-1"
-          :class="statusFilter === opt.value ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
-          @click="statusFilter = opt.value"
-        >
-          {{ opt.label }}
-        </button>
-      </div>
-    </div>
+        />
+      </template>
+    </UiSectionHeading>
 
-    <div v-if="!rows.length && !pending" class="py-6 text-center text-sm text-slate-500">No checks recorded yet.</div>
+    <div v-if="!rows.length && !pending" class="py-6 text-center text-sm text-tertiary">No checks recorded yet.</div>
 
     <div v-else class="overflow-x-auto">
       <table class="w-full min-w-[560px] border-collapse text-sm">
         <thead>
-          <tr class="border-b border-slate-800 text-left text-xs text-slate-500">
-            <th class="px-3 py-2 font-medium">Time</th>
-            <th class="px-3 py-2 font-medium">Status</th>
-            <th class="px-3 py-2 text-right font-medium">HTTP</th>
-            <th class="px-3 py-2 text-right font-medium">Response</th>
-            <th class="px-3 py-2 font-medium">Error</th>
+          <tr class="border-b border-border-default text-left">
+            <th class="px-3 py-2.5 text-xs font-semibold tracking-wide text-tertiary uppercase">Time</th>
+            <th class="px-3 py-2.5 text-xs font-semibold tracking-wide text-tertiary uppercase">Status</th>
+            <th class="px-3 py-2.5 text-right text-xs font-semibold tracking-wide text-tertiary uppercase">HTTP</th>
+            <th class="px-3 py-2.5 text-right text-xs font-semibold tracking-wide text-tertiary uppercase">Response</th>
+            <th class="px-3 py-2.5 text-xs font-semibold tracking-wide text-tertiary uppercase">Error</th>
           </tr>
         </thead>
         <tbody>
           <template v-for="row in rows" :key="row.id">
             <tr
-              class="cursor-pointer border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40"
+              class="cursor-pointer border-b border-border-default transition-colors last:border-0 hover:bg-sunken"
               @click="toggleExpand(row.id)"
             >
-              <td class="whitespace-nowrap px-3 py-2 text-slate-400">{{ formatTime(row.checkedAt) }}</td>
-              <td class="px-3 py-2"><StatusBadge :status="row.status" /></td>
-              <td class="px-3 py-2 text-right text-slate-300">{{ row.httpStatus ?? '—' }}</td>
-              <td class="px-3 py-2 text-right text-slate-300">{{ row.timeTotal == null ? '—' : `${Math.round(row.timeTotal)} ms` }}</td>
-              <td class="truncate px-3 py-2 text-rose-400">{{ row.error ?? '—' }}</td>
+              <td class="px-3 py-2.5 whitespace-nowrap text-secondary">{{ formatTime(row.checkedAt) }}</td>
+              <td class="px-3 py-2.5"><StatusBadge :status="row.status" /></td>
+              <td class="px-3 py-2.5 text-right text-secondary">{{ row.httpStatus ?? '—' }}</td>
+              <td class="px-3 py-2.5 text-right text-secondary">
+                {{ row.timeTotal == null ? '—' : `${Math.round(row.timeTotal)} ms` }}
+              </td>
+              <td class="truncate px-3 py-2.5 text-down">{{ row.error ?? '—' }}</td>
             </tr>
-            <tr v-if="expandedId === row.id" class="border-b border-slate-800/60 last:border-0 bg-slate-950/40">
-              <td colspan="5" class="p-3">
+            <tr v-if="expandedId === row.id" class="border-b border-border-default bg-sunken last:border-0">
+              <td colspan="5" class="p-4">
                 <CheckDetail :check="row" />
               </td>
             </tr>
@@ -97,16 +93,10 @@ function toggleExpand(id: number) {
       </table>
     </div>
 
-    <div class="mt-3 flex justify-center">
-      <button
-        v-if="!done"
-        type="button"
-        :disabled="pending"
-        class="rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-50"
-        @click="loadPage(false)"
-      >
+    <div class="mt-4 flex justify-center">
+      <UiButton v-if="!done" variant="secondary" :disabled="pending" @click="loadPage(false)">
         {{ pending ? 'Loading…' : 'Load more' }}
-      </button>
+      </UiButton>
     </div>
-  </div>
+  </UiCard>
 </template>

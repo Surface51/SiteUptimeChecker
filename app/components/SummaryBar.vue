@@ -16,29 +16,18 @@ const overallUptime = computed(() => {
 </script>
 
 <template>
-  <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-      <div class="text-xs text-slate-500">Sites</div>
-      <div class="mt-1 text-xl font-semibold text-slate-100">{{ sites.length }}</div>
+  <UiCard padding="px-8 py-7">
+    <div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
+      <UiStatBlock :value="sites.length" label="Sites monitored" icon="dns" />
+      <UiStatBlock :value="upCount" label="Up" icon="check_circle" value-class="text-up" />
+      <UiStatBlock :value="degradedCount" label="Degraded" icon="warning" value-class="text-degraded" />
+      <UiStatBlock :value="downCount" label="Down" icon="error" value-class="text-down" />
+      <UiStatBlock
+        :value="overallUptime === null ? '—' : `${overallUptime.toFixed(2)}%`"
+        label="Avg uptime (24h)"
+        icon="show_chart"
+      />
     </div>
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-      <div class="text-xs text-slate-500">Up</div>
-      <div class="mt-1 text-xl font-semibold text-emerald-300">{{ upCount }}</div>
-    </div>
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-      <div class="text-xs text-slate-500">Degraded</div>
-      <div class="mt-1 text-xl font-semibold text-amber-300">{{ degradedCount }}</div>
-    </div>
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-      <div class="text-xs text-slate-500">Down</div>
-      <div class="mt-1 text-xl font-semibold text-rose-300">{{ downCount }}</div>
-    </div>
-    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-      <div class="text-xs text-slate-500">Avg uptime (24h)</div>
-      <div class="mt-1 text-xl font-semibold text-slate-100">
-        {{ overallUptime === null ? '—' : `${overallUptime.toFixed(2)}%` }}
-      </div>
-    </div>
-    <div v-if="pausedCount" class="col-span-2 text-xs text-slate-500 sm:col-span-5">{{ pausedCount }} paused</div>
-  </div>
+    <p v-if="pausedCount" class="mt-5 text-sm text-tertiary">{{ pausedCount }} paused</p>
+  </UiCard>
 </template>

@@ -34,6 +34,8 @@ async function runAllLighthouse() {
   }
 }
 
+const showAddForm = ref(false)
+
 type ViewMode = 'cards' | 'table'
 const viewMode = ref<ViewMode>('cards')
 
@@ -105,116 +107,103 @@ const sortedCardSites = computed(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-6">
-    <AddSiteForm @added="refresh" />
+  <div class="flex flex-col gap-9">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="font-display text-4xl font-bold tracking-tight text-primary">Uptime Dashboard</h1>
+        <p class="mt-1.5 text-base text-secondary">
+          Monitoring {{ sites.length }} {{ sites.length === 1 ? 'site' : 'sites' }}.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2.5">
+        <UiButton variant="ghost" :disabled="runningAllLighthouse" icon="speed" @click="runAllLighthouse">
+          {{ runningAllLighthouse ? 'Queuing…' : 'Run all Lighthouse' }}
+        </UiButton>
+        <UiButton variant="secondary" :icon="showAddForm ? 'close' : 'add'" @click="showAddForm = !showAddForm">
+          {{ showAddForm ? 'Cancel' : 'Add site' }}
+        </UiButton>
+        <UiButton variant="primary" :disabled="checkingAll" icon="refresh" @click="checkAllNow">
+          {{ checkingAll ? 'Checking all…' : 'Check all sites' }}
+        </UiButton>
+      </div>
+    </div>
 
-    <div v-if="error" class="rounded-lg border border-rose-900 bg-rose-950/40 p-4 text-sm text-rose-300">
+    <AddSiteForm v-if="showAddForm" @added="() => { refresh(); showAddForm = false }" />
+
+    <div v-if="error" class="rounded-lg border border-down bg-down-tint p-4 text-sm text-down">
       Failed to load sites: {{ error.message }}
     </div>
 
-    <div v-else-if="pending && !sites.length" class="text-slate-500">Loading…</div>
+    <div v-else-if="pending && !sites.length" class="text-tertiary">Loading…</div>
 
-    <div v-else-if="!sites.length" class="rounded-xl border border-dashed border-slate-800 p-12 text-center text-slate-500">
-      No sites yet. Add one above to start monitoring.
-    </div>
+    <UiEmptyState v-else-if="!sites.length" icon="monitor_heart">
+      No sites yet. Add one to start monitoring.
+    </UiEmptyState>
 
     <template v-else>
       <SummaryBar :sites="sites" />
 
-      <!-- <div class="grid grid-cols-1 gap-4 lg:grid-cols-3"> -->
-      <!--   <FleetStatusDonut :sites="sites" /> -->
-      <!--   <UptimeRankingBar class="lg:col-span-1" :sites="sites" /> -->
-      <!--   <SslExpiryBar class="lg:col-span-1" :sites="sites" /> -->
-      <!-- </div> -->
-
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          :disabled="checkingAll"
-          class="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
-          @click="checkAllNow"
-        >
-          {{ checkingAll ? 'Checking all…' : 'Check all sites' }}
-        </button>
-        <button
-          type="button"
-          :disabled="runningAllLighthouse"
-          class="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
-          @click="runAllLighthouse"
-        >
-          {{ runningAllLighthouse ? 'Queuing…' : 'Run all Lighthouse reports' }}
-        </button>
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <FleetStatusDonut :sites="sites" />
+        <SslExpiryBar :sites="sites" />
       </div>
 
-      <div v-if="allTags.length" class="flex flex-wrap items-center gap-1.5">
-        <span class="text-xs text-slate-500">Filter:</span>
-        <button
+      <div v-if="allTags.length" class="flex flex-wrap items-center gap-2">
+        <span class="mr-1 text-xs tracking-wide text-tertiary uppercase">Filter</span>
+        <UiChip
           v-for="tag in allTags"
           :key="tag"
-          type="button"
-          class="rounded-full px-2.5 py-1 text-xs font-medium transition-colors"
-          :class="
-            selectedTags.some((t) => t.toLowerCase() === tag.toLowerCase())
-              ? 'bg-emerald-900/50 text-emerald-300'
-              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-          "
+          :active="selectedTags.some((t) => t.toLowerCase() === tag.toLowerCase())"
           @click="toggleFilterTag(tag)"
         >
           {{ tag }}
-        </button>
+        </UiChip>
         <button
           v-if="selectedTags.length"
           type="button"
-          class="rounded-full px-2.5 py-1 text-xs text-slate-500 hover:text-slate-300"
+          class="cursor-pointer border-none bg-transparent text-sm text-tertiary transition-colors hover:text-primary"
           @click="selectedTags = []"
         >
           Clear
         </button>
       </div>
 
-      <div class="flex items-center justify-between">
-        <div v-if="viewMode === 'cards'" class="flex gap-1 rounded-md border border-slate-800 p-0.5 text-xs">
-          <button
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div v-if="viewMode === 'cards'" class="flex flex-wrap gap-2">
+          <UiChip
             v-for="opt in [
               { label: 'Status', value: 'status' as const },
               { label: 'Uptime', value: 'uptime24h' as const },
               { label: 'Response', value: 'response' as const },
             ]"
             :key="opt.value"
-            type="button"
-            class="rounded px-2.5 py-1"
-            :class="sortKey === opt.value ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
+            :active="sortKey === opt.value"
+            size="sm"
             @click="sortKey = opt.value"
           >
             Sort: {{ opt.label }}
-          </button>
+          </UiChip>
         </div>
         <div v-else />
 
-        <div class="flex gap-1 rounded-md border border-slate-800 p-0.5 text-xs">
-          <button
-            type="button"
-            class="rounded px-2.5 py-1"
-            :class="viewMode === 'cards' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
-            @click="viewMode = 'cards'"
-          >
-            Cards
-          </button>
-          <button
-            type="button"
-            class="rounded px-2.5 py-1"
-            :class="viewMode === 'table' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200'"
-            @click="viewMode = 'table'"
-          >
-            Table
-          </button>
+        <div class="ml-auto">
+          <UiSegmentedControl
+            v-model="viewMode"
+            :options="[
+              { label: 'Cards', value: 'cards', icon: 'grid_view' },
+              { label: 'Table', value: 'table', icon: 'table_rows' },
+            ]"
+          />
         </div>
       </div>
 
-      <div v-if="!sortedCardSites.length" class="rounded-xl border border-dashed border-slate-800 p-12 text-center text-slate-500">
+      <UiEmptyState v-if="!sortedCardSites.length" icon="filter_alt_off">
         No sites match the selected tags.
-      </div>
-      <div v-else-if="viewMode === 'cards'" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      </UiEmptyState>
+      <div
+        v-else-if="viewMode === 'cards'"
+        class="grid grid-cols-1 gap-6 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]"
+      >
         <SiteCard
           v-for="site in sortedCardSites"
           :key="site.id"

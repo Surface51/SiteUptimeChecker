@@ -27,9 +27,9 @@ const path = computed(() => {
     :width="width"
     :height="height"
     :viewBox="`0 0 ${width} ${height}`"
-    class="overflow-visible text-sky-400"
+    class="overflow-visible text-accent"
   >
     <path :d="path" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
   </svg>
-  <div v-else class="text-xs text-slate-600">No history yet</div>
+  <div v-else class="text-xs text-tertiary">No history yet</div>
 </template>
