@@ -2,6 +2,8 @@ import { closeDb, getDb } from '../utils/db'
 import { startDomainInfoScheduler, stopDomainInfoScheduler } from '../utils/domainInfo'
 import { startLighthouseScheduler, stopLighthouseScheduler } from '../utils/lighthouse'
 import { isLogWatchEnabled } from '../utils/logs/config'
+import { loadLogDbLeaseFromDisk } from '../utils/logs/dbLease'
+import { resumeLeaseWatchdogIfDetached, setLogSchedulersManaged } from '../utils/logs/dbHandoff'
 import { closeLogDb } from '../utils/logs/logDb'
 import {
   startLogIngestScheduler,
@@ -18,6 +20,12 @@ export default defineNitroPlugin((nitroApp) => {
   // The log database is opened lazily on first use, not here: an install with nothing in
   // log-ingress should never pay for a DuckDB instance or hold its lock file.
 
+  // A detach lease may have outlived a restart (notably `nuxt dev` HMR mid-CLI-run) — honour
+  // it so this process doesn't fight the CLI for the file lock, and keep watching for the
+  // holder to finish or die.
+  loadLogDbLeaseFromDisk()
+  resumeLeaseWatchdogIfDetached()
+
   // In `nuxt dev`, Nitro restarts on every server-side file change, which would otherwise
   // re-trigger uptime checks, Lighthouse audits, and WHOIS/DNS lookups for every site on every
   // save. Keep dev reads-only against the existing DB; only run the real schedulers in
@@ -29,6 +37,8 @@ export default defineNitroPlugin((nitroApp) => {
     startDomainInfoScheduler()
     startLogIngestScheduler()
     startLogRetentionScheduler()
+    // So a DB handoff knows to restart these when the CLI reattaches.
+    setLogSchedulersManaged(true)
 
     if (isLogWatchEnabled()) {
       // Imported dynamically so chokidar is never loaded when watching is off.

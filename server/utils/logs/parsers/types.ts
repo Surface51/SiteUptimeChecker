@@ -90,4 +90,13 @@ export interface DbEventRow {
 export interface LineParser<T> {
   feedLine(line: string): T[]
   flush(): T[]
+  /**
+   * True when the parser is holding rows that `feedLine` has not emitted yet — a half-read
+   * multi-line record, or an in-progress aggregation bucket. The ingest loop uses this to
+   * decide where a stopped/resumed run may safely re-enter the file: while state is pending,
+   * the byte offset that started that state is the only safe resume point, because a fresh
+   * parser on resume has to re-read those lines to reproduce the row. Parsers that emit or
+   * discard every line immediately can leave this unimplemented (treated as `false`).
+   */
+  hasPendingState?(): boolean
 }

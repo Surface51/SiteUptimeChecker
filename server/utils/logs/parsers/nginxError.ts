@@ -94,6 +94,10 @@ export class NginxErrorParser implements LineParser<NginxErrorAggRow> {
     return this.drain()
   }
 
+  hasPendingState(): boolean {
+    return this.bucketMap.size > 0
+  }
+
   private drain(): NginxErrorAggRow[] {
     const rows = Array.from(this.bucketMap.values())
     this.bucketMap.clear()

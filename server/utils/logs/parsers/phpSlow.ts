@@ -55,6 +55,10 @@ export class PhpSlowParser implements LineParser<PhpSlowRow> {
     return rows
   }
 
+  hasPendingState(): boolean {
+    return this.pending !== null
+  }
+
   getErrorCount(): number {
     return this.errorCount
   }

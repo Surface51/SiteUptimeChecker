@@ -47,8 +47,47 @@ appended. Rotated and `.gz` files are read once; a live file that is rotated out
 change in the hash of its first 1KB, or by shrinking) is re-read from the start.
 
 - **Automatic**: hourly in production, with a retention prune at local midnight.
-- **Manual**: the **Ingest now** button on any site's Logs tab, or `POST /api/logs/ingest/run`.
-  This is the way to trigger a run in `nuxt dev`, where the schedulers stay off.
+- **Manual**: the **Ingest now** button on any site's Logs tab or the **/logs** page, or
+  `POST /api/logs/ingest/run` (optionally `{ "slug": "<folder>" }` for one folder). This is the
+  way to trigger a run in `nuxt dev`, where the schedulers stay off.
+- **Bulk / CLI**: `npm run logs:ingest` — a parallel re-ingest that uses every core and a much
+  larger memory budget than the in-process run. See below.
+
+A run can be **stopped** at the next parser-safe boundary from the /logs page (or
+`POST /api/logs/ingest/stop`), and individual folders can be **paused** so the scheduler, the
+watcher and the CLI all skip them (`POST /api/logs/<slug>/pause` `{ "paused": true }`). Pause
+state lives in SQLite so it survives a bulk CLI ingest holding the DuckDB store.
+
+### The /logs status page
+
+A top-level **Logs** nav item lists every folder in `log-ingress/` — including ones never
+ingested and ones linked to no monitored site — with per-file import status (offset, lines,
+parse errors, last error), pause/resume, per-folder ingest, and purge.
+
+### `npm run logs:ingest`
+
+The hourly in-process run is deliberately gentle: one file at a time, `DUCKDB_MEMORY_LIMIT` /
+`DUCKDB_THREADS`, sharing the web server's process. For a large backfill that is too slow. The
+CLI removes those limits:
+
+- Parses files in parallel across `worker_threads` (default: cores − 1), each into its own
+  scratch DuckDB, which the main process merges with `ATTACH` + a single `INSERT … SELECT` +
+  offset-advance transaction (exactly-once per file).
+- If a server is running, the CLI asks it to release the DuckDB store for the duration
+  (`POST /api/logs/db/detach`), heartbeats progress back so the web UI keeps updating, and
+  reattaches when done. Log analytics endpoints return `503` during the window; the /logs
+  folder list keeps working. A crashed CLI is recovered by the server within ~60s (PID
+  liveness + lease TTL). With no server running, the CLI just takes the file lock directly.
+
+```bash
+npm run logs:ingest -- --dry-run                 # show the schedule, write nothing
+npm run logs:ingest -- --jobs 8 --site charles-ives
+npm run logs:ingest -- --memory 80% --threads 12
+```
+
+Key flags: `--jobs`, `--memory <n%|nGB>`, `--threads`, `--site <slug>` (repeatable), `--force`
+(abort a server-side run during the handoff), `--no-server`, `--dry-run`, `--keep-temp`,
+`--no-progress`. `--help` lists them all. Log alerts are left to the server's next tick.
 
 ### Configuration
 
@@ -58,8 +97,11 @@ change in the hash of its first 1KB, or by shrinking) is re-read from the start.
 | `UPTIME_LOG_INGRESS_DIR` | `./log-ingress` | Where log folders are looked for |
 | `UPTIME_LOG_RETENTION_DAYS` | `90` | Log rows older than this are pruned daily |
 | `UPTIME_LOG_WATCH` | unset | Set to `1` to also ingest on file changes (chokidar) |
-| `DUCKDB_MEMORY_LIMIT` | `1GB` | Memory ceiling for log queries |
-| `DUCKDB_THREADS` | `2` | Threads DuckDB may use |
+| `DUCKDB_MEMORY_LIMIT` | `1GB` | Memory ceiling for log queries — **the server only**, not `logs:ingest` |
+| `DUCKDB_THREADS` | `2` | Threads DuckDB may use — server only |
+| `UPTIME_URL` | `http://localhost:3000` | Server base URL the `logs:ingest` CLI hands off to |
+| `UPTIME_CLI_TOKEN` | unset | If set, the DB-handoff endpoints require `Authorization: Bearer <it>` instead of being loopback-only |
+| `UPTIME_INGEST_MEMORY` | `70%` | Default total DuckDB memory budget for `logs:ingest` |
 
 Retention deletes old log rows but deliberately keeps the ingest bookkeeping for files that still
 exist, so a pruned file is not simply re-ingested on the next run.

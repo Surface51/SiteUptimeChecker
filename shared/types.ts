@@ -240,3 +240,25 @@ export interface LighthouseJob {
   finishedAt: string | null
   error: string | null
 }
+
+/** Progress of the one-at-a-time log ingest run. A single global object, not per folder:
+ * ingestion is serialized, so at most one run exists. Shared by the server, the SSE stream
+ * (`/api/logs/ingest/events`) and the CLI's heartbeat relay. */
+export interface IngestStatus {
+  running: boolean
+  /** Set once a stop has been asked for and the run hasn't wound down yet. */
+  stopRequested: boolean
+  /** Why the run is stopping — 'stop' (operator), 'detach' (CLI handoff), or null. */
+  stoppedReason: 'stop' | 'detach' | null
+  /** Which process is doing the work the status describes. */
+  source: 'server' | 'cli'
+  startedAt: string | null
+  finishedAt: string | null
+  filesTotal: number
+  filesDone: number
+  filesSkipped: number
+  currentFile: string | null
+  currentFileBytesTotal: number
+  currentFileBytesDone: number
+  errors: string[]
+}

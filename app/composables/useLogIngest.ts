@@ -1,18 +1,12 @@
-export interface IngestStatus {
-  running: boolean
-  startedAt: string | null
-  finishedAt: string | null
-  filesTotal: number
-  filesDone: number
-  filesSkipped: number
-  currentFile: string | null
-  currentFileBytesTotal: number
-  currentFileBytesDone: number
-  errors: string[]
-}
+import type { IngestStatus } from '#shared/types'
+
+export type { IngestStatus }
 
 const EMPTY: IngestStatus = {
   running: false,
+  stopRequested: false,
+  stoppedReason: null,
+  source: 'server',
   startedAt: null,
   finishedAt: null,
   filesTotal: 0,
@@ -81,13 +75,26 @@ export function useLogIngest() {
   })
 
   const starting = ref(false)
+  const stopping = ref(false)
 
-  async function runIngest() {
+  async function runIngest(slug?: string) {
     starting.value = true
     try {
-      await $fetch('/api/logs/ingest/run', { method: 'POST' })
+      await $fetch('/api/logs/ingest/run', {
+        method: 'POST',
+        body: slug ? { slug } : undefined,
+      })
     } finally {
       starting.value = false
+    }
+  }
+
+  async function stopIngest() {
+    stopping.value = true
+    try {
+      await $fetch('/api/logs/ingest/stop', { method: 'POST' })
+    } finally {
+      stopping.value = false
     }
   }
 
@@ -97,5 +104,5 @@ export function useLogIngest() {
     onUnmounted(() => finishListeners.delete(fn))
   }
 
-  return { status, connected, progress, starting, runIngest, onFinished }
+  return { status, connected, progress, starting, stopping, runIngest, stopIngest, onFinished }
 }

@@ -1,16 +1,8 @@
 <script setup lang="ts">
-const { status, progress, starting, runIngest } = useLogIngest()
+const { status, progress, starting, runIngest, onFinished } = useLogIngest()
 
 const emit = defineEmits<{ finished: [] }>()
-const { onFinished } = useLogIngest()
 onFinished(() => emit('finished'))
-
-const currentFileName = computed(() => status.value.currentFile?.split('/').slice(-3).join('/') ?? null)
-
-const fileProgress = computed(() => {
-  const { currentFileBytesTotal: total, currentFileBytesDone: done } = status.value
-  return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0
-})
 
 const finishedLabel = computed(() => {
   if (!status.value.finishedAt) return null
@@ -31,21 +23,7 @@ const finishedLabel = computed(() => {
         </template>
       </UiSectionHeading>
 
-      <div v-if="status.running" class="flex flex-col gap-2">
-        <div class="flex items-center justify-between text-sm text-secondary">
-          <span>{{ status.filesDone }} of {{ status.filesTotal }} files</span>
-          <span>{{ progress }}%</span>
-        </div>
-        <div class="h-1.5 overflow-hidden rounded-full bg-sunken">
-          <div
-            class="h-full rounded-full bg-accent transition-[width] duration-300 ease-snappy"
-            :style="{ width: `${progress}%` }"
-          />
-        </div>
-        <p v-if="currentFileName" class="truncate font-mono text-xs text-tertiary">
-          {{ currentFileName }} · {{ fileProgress }}%
-        </p>
-      </div>
+      <LogsIngestProgress v-if="status.running" :status="status" :progress="progress" />
 
       <div v-else class="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm text-secondary">
         <span v-if="finishedLabel">Last run {{ finishedLabel }}</span>

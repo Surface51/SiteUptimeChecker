@@ -100,6 +100,10 @@ export class MysqlSlowParser implements LineParser<MysqlSlowRow> {
     return rows
   }
 
+  hasPendingState(): boolean {
+    return this.pending !== null
+  }
+
   getErrorCount(): number {
     return this.errorCount
   }

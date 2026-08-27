@@ -49,6 +49,10 @@ export class PhpErrorParser implements LineParser<PhpErrorRow> {
     return [row]
   }
 
+  hasPendingState(): boolean {
+    return this.pending !== null
+  }
+
   getErrorCount(): number {
     return this.errorCount
   }

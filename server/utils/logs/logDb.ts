@@ -1,7 +1,9 @@
 import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { DuckDBInstance, type DuckDBConnection } from '@duckdb/node-api'
+import { createError } from 'h3'
 import { getLogDbPath } from './config'
+import { getLogDbLease } from './dbLease'
 import { acquireLogDbLockWithRetry } from './lock'
 import { migrateLogDb } from './schema'
 
@@ -53,6 +55,16 @@ async function init(): Promise<void> {
 /** Opens the log database on first use. Never called at boot — an uptime install with no logs
  * should never pay for a DuckDB instance or hold its lock file. */
 export async function ensureLogDb(): Promise<void> {
+  // The database has been handed off to an external bulk ingest (the `logs:ingest` CLI),
+  // which holds the file lock. Re-opening now would deadlock on that lock; refuse with a 503
+  // so every log endpoint degrades cleanly instead of hanging.
+  const lease = getLogDbLease()
+  if (lease) {
+    throw createError({
+      statusCode: 503,
+      statusMessage: `Log database is detached for an external ingest (pid ${lease.pid}); retry shortly.`,
+    })
+  }
   if (!initPromise) initPromise = init()
   return initPromise
 }

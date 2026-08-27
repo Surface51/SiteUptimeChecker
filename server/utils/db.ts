@@ -200,6 +200,16 @@ export function getDb(): Database.Database {
       last_fired_at TEXT NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (site_id, alert_type, fingerprint)
     );
+
+    -- Per log-ingress folder settings, keyed by folder name rather than a site id: a folder
+    -- can sit in log-ingress/ with no monitored site and no DuckDB rows yet. Lives here in
+    -- SQLite (not the DuckDB log store) so the status page and the CLI can both read it while
+    -- the log store is detached during a bulk ingest. An absent row means the folder is active.
+    CREATE TABLE IF NOT EXISTS log_folder_settings (
+      slug TEXT PRIMARY KEY,
+      paused INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `)
 
   migrate(db)
@@ -1263,4 +1273,45 @@ export function dismissAllNotifications(filter?: { siteId?: number }) {
   } else {
     getDb().prepare('UPDATE notifications SET dismissed = 1 WHERE dismissed = 0').run()
   }
+}
+
+// ---------- log folder settings ----------
+
+export interface LogFolderSetting {
+  slug: string
+  paused: boolean
+  updatedAt: string
+}
+
+export function listLogFolderSettings(): LogFolderSetting[] {
+  const rows = getDb()
+    .prepare('SELECT slug, paused, updated_at FROM log_folder_settings')
+    .all() as { slug: string; paused: number; updated_at: string }[]
+  return rows.map((r) => ({ slug: r.slug, paused: !!r.paused, updatedAt: r.updated_at }))
+}
+
+/** A folder with no row is active. */
+export function isLogFolderPaused(slug: string): boolean {
+  const row = getDb()
+    .prepare('SELECT paused FROM log_folder_settings WHERE slug = ?')
+    .get(slug) as { paused: number } | undefined
+  return !!row?.paused
+}
+
+/** The set of paused folder slugs — one query for callers that check many folders in a loop. */
+export function pausedLogFolders(): Set<string> {
+  const rows = getDb()
+    .prepare('SELECT slug FROM log_folder_settings WHERE paused = 1')
+    .all() as { slug: string }[]
+  return new Set(rows.map((r) => r.slug))
+}
+
+export function setLogFolderPaused(slug: string, paused: boolean) {
+  getDb()
+    .prepare(
+      `INSERT INTO log_folder_settings (slug, paused, updated_at)
+       VALUES (?, ?, datetime('now'))
+       ON CONFLICT(slug) DO UPDATE SET paused = excluded.paused, updated_at = datetime('now')`,
+    )
+    .run(slug, paused ? 1 : 0)
 }

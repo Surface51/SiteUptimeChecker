@@ -10,7 +10,9 @@
     "postinstall": "nuxt prepare",
     "typecheck": "nuxi typecheck",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "logs:ingest:build": "node scripts/logs-ingest/build.mjs",
+    "logs:ingest": "node scripts/logs-ingest/build.mjs && node .output/logs-ingest/cli.js"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.5-r.4",
@@ -35,6 +37,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "esbuild": "^0.28.1",
     "@types/geoip-lite": "^1.4.4",
     "@types/luxon": "^3.7.5",
     "typescript": "^5.9.3",
