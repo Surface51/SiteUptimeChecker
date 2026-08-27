@@ -10,8 +10,13 @@ dist
 node_modules
 
 # Logs
-logs
+# Root-scoped: a bare `logs` also matches source directories like app/components/logs,
+# which silently excludes them from git *and* from Tailwind's source scanning.
+/logs
 *.log
+
+# Log files dropped (or symlinked) in for analysis
+/log-ingress
 
 # Misc
 .DS_Store

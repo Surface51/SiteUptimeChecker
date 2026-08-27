@@ -8,6 +8,9 @@ const TOAST_TYPE: Record<NotificationType, 'success' | 'warning' | 'error'> = {
   degraded: 'warning',
   ssl_expiring: 'warning',
   lighthouse_regression: 'warning',
+  log_5xx_spike: 'error',
+  log_php_fatal: 'error',
+  log_threat_ip: 'warning',
 }
 
 export function useNotifications() {

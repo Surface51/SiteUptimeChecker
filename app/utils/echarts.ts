@@ -8,6 +8,7 @@ import {
   LineChart,
   PieChart,
   RadarChart,
+  ScatterChart,
 } from 'echarts/charts'
 import {
   CalendarComponent,
@@ -30,6 +31,7 @@ echarts.use([
   HeatmapChart,
   RadarChart,
   GaugeChart,
+  ScatterChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
@@ -61,6 +63,14 @@ type ChartPalette = {
   /** Extra multi-series colors for comparisons. */
   extra1: string
   extra2: string
+  /**
+   * Second categorical slot for the log charts, paired with `down`. A distinct blue rather
+   * than the `maint` blue, which sits just under the chroma floor and reads gray as a series
+   * fill. See logSeriesPalette() for why this pairing specifically.
+   */
+  logAlt: string
+  /** The card background charts sit on — used to cut gaps between stacked segments. */
+  surface: string
   tooltipBg: string
   tooltipBorder: string
 }
@@ -80,6 +90,8 @@ const LIGHT_PALETTE: ChartPalette = {
   neutral: '#8f8f8f', // gray-400
   extra1: '#5c5c5c', // gray-600
   extra2: '#b8b8b8', // gray-300
+  logAlt: '#3a6fb5',
+  surface: '#ffffff',
   tooltipBg: '#ffffff',
   tooltipBorder: '#dcdcdc',
 }
@@ -99,6 +111,8 @@ const DARK_PALETTE: ChartPalette = {
   neutral: '#5c5c5c',
   extra1: '#b8b8b8', // gray-300
   extra2: '#5c5c5c', // gray-600
+  logAlt: '#5f8fd0',
+  surface: '#0a0a0a',
   tooltipBg: '#0a0a0a',
   tooltipBorder: '#262626',
 }
@@ -140,6 +154,23 @@ export function comparePalette(): string[] {
     chartColors.degraded,
     chartColors.extra1,
   ]
+}
+
+/**
+ * The two-series palette for log analytics charts (4xx vs 5xx, bot vs human, and so on).
+ *
+ * Blue + red rather than the semantically tempting amber + red: checked with the dataviz
+ * palette validator, amber `degraded` against red `down` separates by only ΔE 2.9 under
+ * deuteranopia and 14.7 with normal vision — indistinguishable stacked next to each other.
+ * This pairing clears every check in both themes (ΔE 20+ under CVD). Green `up` is likewise
+ * kept out of these charts: green against red is the classic red-green collision (ΔE 7.0
+ * light, 5.8 dark), so where a third series is unavoidable, prefer small multiples or a
+ * lightness split against `primary` over adding a hue.
+ *
+ * Call inside a computed() so it re-resolves when the theme flips.
+ */
+export function logSeriesPalette(): string[] {
+  return [chartColors.logAlt, chartColors.down]
 }
 
 const FONT = 'Barlow, sans-serif'

@@ -2,7 +2,22 @@
 import type { CompareRow } from '#shared/types'
 import { comparePalette } from '../utils/echarts'
 
-const props = defineProps<{ rows: CompareRow[] }>()
+interface TrafficEntry {
+  siteId: number
+  summary: { requests: number; errorRate: number; bytes: number; p95: number | null } | null
+}
+
+const props = withDefaults(
+  defineProps<{ rows: CompareRow[]; traffic?: TrafficEntry[] }>(),
+  { traffic: () => [] },
+)
+
+/** Traffic figures keyed by site, so a site without linked logs falls through to a dash. */
+function trafficFor(siteId: number) {
+  return props.traffic.find((entry) => entry.siteId === siteId)?.summary ?? null
+}
+
+const hasTraffic = computed(() => props.traffic.some((entry) => entry.summary !== null))
 
 // Same series colors the compare charts use, so the header dots act as a shared legend.
 const seriesColors = computed(() => {
@@ -39,7 +54,8 @@ interface MetricRow {
   label: string
   values: (number | null)[]
   format: (v: number | null) => string
-  better: 'max' | 'min'
+  /** 'none' for metrics where neither direction is an improvement, e.g. raw traffic volume. */
+  better: 'max' | 'min' | 'none'
 }
 
 const metrics = computed<MetricRow[]>(() => [
@@ -52,9 +68,37 @@ const metrics = computed<MetricRow[]>(() => [
   { label: 'Downtime', values: props.rows.map((r) => r.incidents.totalDownSeconds), format: formatDuration, better: 'min' },
   { label: 'SSL days left', values: props.rows.map((r) => r.sslDaysRemaining), format: formatCount, better: 'max' },
   { label: 'Lighthouse perf', values: props.rows.map((r) => r.lighthouse.performance), format: formatCount, better: 'max' },
+  ...(hasTraffic.value
+    ? ([
+        {
+          label: 'Log requests',
+          values: props.rows.map((r) => trafficFor(r.site.id)?.requests ?? null),
+          format: (v: number | null) => (v === null ? '—' : v.toLocaleString()),
+          // More traffic is neither good nor bad, so nothing is highlighted as "best".
+          better: 'none',
+        },
+        {
+          label: 'Log error rate',
+          values: props.rows.map((r) => trafficFor(r.site.id)?.errorRate ?? null),
+          format: formatPct,
+          better: 'min',
+        },
+        {
+          label: 'Log p95',
+          values: props.rows.map((r) => {
+            const p95 = trafficFor(r.site.id)?.p95
+            // Access-log durations are seconds; the table's other latencies are milliseconds.
+            return p95 === null || p95 === undefined ? null : p95 * 1000
+          }),
+          format: formatMs,
+          better: 'min',
+        },
+      ] as MetricRow[])
+    : []),
 ])
 
-function bestIndex(values: (number | null)[], better: 'max' | 'min'): number | null {
+function bestIndex(values: (number | null)[], better: 'max' | 'min' | 'none'): number | null {
+  if (better === 'none') return null
   const present = values.map((v, i) => (v === null ? null : i)).filter((i): i is number => i !== null)
   if (present.length < 2) return null
   const beats = better === 'max' ? (a: number, b: number) => a > b : (a: number, b: number) => a < b

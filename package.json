@@ -13,14 +13,21 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@duckdb/node-api": "^1.5.5-r.4",
     "@tailwindcss/vite": "^4.3.3",
     "better-sqlite3": "^12.11.1",
+    "chokidar": "^5.0.0",
     "chrome-launcher": "^1.2.1",
+    "crawler-user-agents": "^1.60.0",
     "echarts": "^6.1.0",
+    "geoip-lite": "^2.0.3",
+    "isbot": "^5.2.1",
     "lighthouse": "^13.4.0",
+    "luxon": "^3.7.2",
     "nuxt": "^4.4.8",
     "playwright": "^1.61.1",
     "tailwindcss": "^4.3.3",
+    "ua-parser-js": "^1.0.41",
     "vue": "^3.5.39",
     "vue-echarts": "^8.0.1",
     "vue-router": "^5.1.0",
@@ -28,6 +35,8 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/geoip-lite": "^1.4.4",
+    "@types/luxon": "^3.7.5",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10",
     "vue-tsc": "^3.3.7"

@@ -71,18 +71,33 @@ const compareData = ref<CompareRow[] | null>(null)
 const loading = ref(false)
 const fetchError = ref<string | null>(null)
 
+export interface CompareTrafficEntry {
+  siteId: number
+  summary: { requests: number; errorRate: number; bytes: number; p95: number | null } | null
+}
+const trafficData = ref<CompareTrafficEntry[]>([])
+
 async function loadComparison() {
   if (selectedIds.value.length < 2) {
     compareData.value = null
+    trafficData.value = []
     fetchError.value = null
     return
   }
   loading.value = true
   fetchError.value = null
+  const query = { ids: selectedIds.value.join(','), hours: selectedHours.value }
   try {
-    compareData.value = await $fetch<CompareRow[]>('/api/compare', {
-      query: { ids: selectedIds.value.join(','), hours: selectedHours.value },
-    })
+    // Fetched in parallel: uptime metrics come from SQLite, traffic from the DuckDB log store,
+    // and sites without linked logs simply come back with a null summary.
+    const [comparison, traffic] = await Promise.all([
+      $fetch<CompareRow[]>('/api/compare', { query }),
+      $fetch<{ traffic: CompareTrafficEntry[] }>('/api/compare-logs', { query }).catch(() => ({
+        traffic: [],
+      })),
+    ])
+    compareData.value = comparison
+    trafficData.value = traffic.traffic
   } catch (e: any) {
     fetchError.value = e?.data?.statusMessage || 'Failed to load comparison'
   } finally {
@@ -139,7 +154,7 @@ watch([selectedIds, selectedHours], loadComparison, { immediate: true, deep: tru
     <div v-else-if="loading && !compareData" class="text-tertiary">Loading…</div>
 
     <template v-else-if="compareData">
-      <CompareSummaryTable :rows="compareData" />
+      <CompareSummaryTable :rows="compareData" :traffic="trafficData" />
 
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <CompareUptimeBar :rows="compareData" />

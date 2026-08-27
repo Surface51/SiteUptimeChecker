@@ -6,6 +6,7 @@ const name = ref('')
 const checkIntervalSeconds = ref(300)
 const degradedMs = ref(5000)
 const expectedStatus = ref('')
+const logSlug = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
 
@@ -28,6 +29,7 @@ async function submit() {
         checkIntervalSeconds: checkIntervalSeconds.value,
         degradedMs: degradedMs.value,
         expectedStatus: expectedStatus.value.trim() === '' ? null : Number(expectedStatus.value),
+        logSlug: logSlug.value || null,
       },
     })
     url.value = ''
@@ -35,6 +37,7 @@ async function submit() {
     checkIntervalSeconds.value = 300
     degradedMs.value = 5000
     expectedStatus.value = ''
+    logSlug.value = ''
     emit('added')
   } catch (e: any) {
     errorMessage.value = e?.data?.statusMessage || e?.statusMessage || 'Failed to add site'
@@ -80,6 +83,9 @@ async function submit() {
           </div>
           <div class="sm:w-56">
             <UiInput v-model="expectedStatus" label="Expected status (optional)" placeholder="e.g. 401" />
+          </div>
+          <div class="sm:w-72">
+            <LogSlugPicker v-model="logSlug" />
           </div>
         </div>
       </details>

@@ -39,17 +39,23 @@ export default defineNuxtConfig({
   nitro: {
     hooks: {
       async compiled(nitro) {
-        // lighthouse loads many of its own gatherer/audit/report-asset files at runtime via
-        // dynamic import() or fs.readFileSync with computed paths, which Nitro's static
-        // dependency tracer can't follow — it only copies the files it can see referenced
-        // directly. Rather than chase each missing file, copy the whole package wholesale so
-        // production has everything the traced partial copy would otherwise be missing.
+        // These packages all load files at runtime that Nitro's static dependency tracer
+        // can't follow, so it copies an incomplete subset of each. Rather than chase the
+        // individual missing files, copy the packages wholesale.
+        //
+        //   lighthouse  — pulls its gatherers/audits/report assets via dynamic import() and
+        //                 fs.readFileSync with computed paths.
+        //   @duckdb     — @duckdb/node-api resolves its prebuilt platform bindings package
+        //                 (@duckdb/node-bindings-<platform>) indirectly.
+        //   geoip-lite  — loaded through a deferred createRequire in logs/enrich/geo.ts.
         const serverDir = nitro.options.output.serverDir
-        await cp(
-          join(process.cwd(), 'node_modules/lighthouse'),
-          join(serverDir, 'node_modules/lighthouse'),
-          { recursive: true, force: true },
-        )
+        for (const pkg of ['lighthouse', '@duckdb', 'geoip-lite']) {
+          await cp(
+            join(process.cwd(), 'node_modules', pkg),
+            join(serverDir, 'node_modules', pkg),
+            { recursive: true, force: true },
+          )
+        }
       },
     },
   },

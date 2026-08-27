@@ -65,6 +65,8 @@ export interface Site {
   degradedMs: number
   expectedStatus: number | null
   tags: string[]
+  /** Name of this site's folder under log-ingress/, or null if no logs are shipped for it. */
+  logSlug: string | null
 }
 
 export interface CheckRow {
@@ -180,7 +182,16 @@ export interface CompareRow {
   series: HistoryPoint[]
 }
 
-export type NotificationType = 'down' | 'up' | 'degraded' | 'ssl_expiring' | 'lighthouse_regression'
+export type NotificationType =
+  | 'down'
+  | 'up'
+  | 'degraded'
+  | 'ssl_expiring'
+  | 'lighthouse_regression'
+  // Raised from ingested logs rather than from a check — see server/utils/logs/alerts.ts.
+  | 'log_5xx_spike'
+  | 'log_php_fatal'
+  | 'log_threat_ip'
 
 export type LighthouseFormFactor = 'mobile' | 'desktop'
 

@@ -153,6 +153,7 @@ const editName = ref('')
 const editInterval = ref(300)
 const editDegradedMs = ref(5000)
 const editExpectedStatus = ref('')
+const editLogSlug = ref('')
 const editError = ref('')
 const saving = ref(false)
 
@@ -170,6 +171,7 @@ function startEdit() {
   editInterval.value = site.value.checkIntervalSeconds
   editDegradedMs.value = site.value.degradedMs
   editExpectedStatus.value = site.value.expectedStatus === null ? '' : String(site.value.expectedStatus)
+  editLogSlug.value = site.value.logSlug ?? ''
   editError.value = ''
   isEditing.value = true
 }
@@ -186,6 +188,7 @@ async function saveEdit() {
         checkIntervalSeconds: editInterval.value,
         degradedMs: editDegradedMs.value,
         expectedStatus: editExpectedStatus.value.trim() === '' ? null : Number(editExpectedStatus.value),
+        logSlug: editLogSlug.value || null,
       },
     })
     isEditing.value = false
@@ -300,6 +303,11 @@ async function removeSite() {
           <div class="sm:w-52">
             <UiInput v-model="editExpectedStatus" label="Expected status (optional)" placeholder="e.g. 401" />
           </div>
+          <div class="sm:w-72">
+            <LogSlugPicker v-model="editLogSlug" :site-id="id" />
+          </div>
+        </div>
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
           <div class="flex gap-2">
             <UiButton type="submit" variant="primary" :disabled="saving">
               {{ saving ? 'Saving…' : 'Save' }}
@@ -402,10 +410,15 @@ async function removeSite() {
       </div>
     </section>
 
+    <!-- Log traffic (renders only when the site is linked to a log folder) -->
+    <ClientOnly>
+      <LogsTrafficSummary :site-id="id" />
+    </ClientOnly>
+
     <!-- Incidents & maintenance -->
     <section class="flex flex-col gap-4">
       <UiSectionHeading>Incidents &amp; maintenance</UiSectionHeading>
-      <IncidentList :incidents="incidents ?? []" />
+      <IncidentList :incidents="incidents ?? []" :log-slug="site.logSlug" />
       <UiCard v-if="(incidents ?? []).some((i) => i.endedAt !== null)">
         <UiSectionHeading as="h3" class="mb-4">Incident duration (MTTR trend)</UiSectionHeading>
         <IncidentDurationBar :incidents="incidents ?? []" />

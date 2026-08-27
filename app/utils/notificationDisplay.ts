@@ -7,6 +7,9 @@ export const notificationTypeIcon: Record<NotificationType, string> = {
   degraded: 'speed',
   ssl_expiring: 'lock',
   lighthouse_regression: 'trending_down',
+  log_5xx_spike: 'report',
+  log_php_fatal: 'bug_report',
+  log_threat_ip: 'shield',
 }
 
 /** Status tone per notification type, driving the tinted icon circles. */
@@ -16,6 +19,9 @@ export const notificationTypeTone: Record<NotificationType, 'up' | 'down' | 'deg
   degraded: 'degraded',
   ssl_expiring: 'degraded',
   lighthouse_regression: 'maint',
+  log_5xx_spike: 'down',
+  log_php_fatal: 'down',
+  log_threat_ip: 'degraded',
 }
 
 /** Written out in full — Tailwind only sees complete class strings, so these
@@ -26,6 +32,9 @@ export const notificationToneClass: Record<NotificationType, string> = {
   degraded: 'bg-degraded-tint text-degraded',
   ssl_expiring: 'bg-degraded-tint text-degraded',
   lighthouse_regression: 'bg-maint-tint text-maint',
+  log_5xx_spike: 'bg-down-tint text-down',
+  log_php_fatal: 'bg-down-tint text-down',
+  log_threat_ip: 'bg-degraded-tint text-degraded',
 }
 
 export const notificationTypeLabel: Record<NotificationType, string> = {
@@ -34,6 +43,9 @@ export const notificationTypeLabel: Record<NotificationType, string> = {
   degraded: 'Degraded',
   ssl_expiring: 'SSL expiring',
   lighthouse_regression: 'Lighthouse regression',
+  log_5xx_spike: 'Error spike',
+  log_php_fatal: 'PHP fatals',
+  log_threat_ip: 'Suspicious IP',
 }
 
 export function formatRelativeTime(iso: string): string {

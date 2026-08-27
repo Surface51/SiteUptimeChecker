@@ -1,4 +1,5 @@
 import { buildSiteSummary, getSiteByUrl, insertSite } from '../../utils/db'
+import { normalizeLogSlug } from '../../utils/logs/slug'
 import { normalizeSiteUrl } from '../../utils/url'
 import { runCheck } from '../../utils/checks'
 import { scheduleSite } from '../../utils/scheduler'
@@ -13,6 +14,7 @@ export default defineEventHandler(async (event) => {
     checkIntervalSeconds?: number
     degradedMs?: number
     expectedStatus?: number | null
+    logSlug?: string | null
   }>(event)
 
   if (!body?.url || typeof body.url !== 'string') {
@@ -45,12 +47,18 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid expected status' })
   }
 
+  const logSlug = normalizeLogSlug(body.logSlug ?? null)
+  if (logSlug === undefined) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid log folder name' })
+  }
+
   const site = insertSite({
     url,
     name: body.name?.trim() || null,
     checkIntervalSeconds,
     degradedMs: body.degradedMs,
     expectedStatus: body.expectedStatus ?? null,
+    logSlug,
   })
 
   // Fire the initial check and screenshot in the background — don't make the caller wait for them.

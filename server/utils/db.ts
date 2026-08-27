@@ -188,6 +188,18 @@ export function getDb(): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_site_tags_tag ON site_tags(tag_id);
+
+    -- Cooldown bookkeeping for log-derived alerts. Without it, every ingest run would
+    -- re-notify about the same ongoing 5xx spike or the same already-reported threat IP.
+    -- fingerprint distinguishes instances within a type (an IP address, say) and is ''
+    -- for alerts that are simply per-site.
+    CREATE TABLE IF NOT EXISTS log_alert_state (
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      alert_type TEXT NOT NULL,
+      fingerprint TEXT NOT NULL DEFAULT '',
+      last_fired_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (site_id, alert_type, fingerprint)
+    );
   `)
 
   migrate(db)
@@ -210,6 +222,11 @@ function migrate(db: Database.Database) {
   if (!hasColumn(db, 'notifications', 'dismissed')) {
     db.exec(`ALTER TABLE notifications ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0`)
   }
+  // Links a site to a folder in log-ingress/ (and so to its rows in the DuckDB log store).
+  // Nullable: most sites are monitored without anyone shipping their logs here.
+  if (!hasColumn(db, 'sites', 'log_slug')) {
+    db.exec(`ALTER TABLE sites ADD COLUMN log_slug TEXT`)
+  }
 }
 
 export function closeDb() {
@@ -231,6 +248,7 @@ interface SiteRow {
   screenshot_updated_at: string | null
   degraded_ms: number
   expected_status: number | null
+  log_slug: string | null
 }
 
 function mapSite(row: SiteRow): Site {
@@ -245,6 +263,7 @@ function mapSite(row: SiteRow): Site {
     degradedMs: row.degraded_ms,
     expectedStatus: row.expected_status,
     tags: getTagsForSite(row.id),
+    logSlug: row.log_slug,
   }
 }
 
@@ -327,10 +346,11 @@ export function insertSite(input: {
   checkIntervalSeconds: number
   degradedMs?: number
   expectedStatus?: number | null
+  logSlug?: string | null
 }): Site {
   const result = getDb()
     .prepare(
-      'INSERT INTO sites (url, name, check_interval_seconds, degraded_ms, expected_status) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO sites (url, name, check_interval_seconds, degraded_ms, expected_status, log_slug) VALUES (?, ?, ?, ?, ?, ?)',
     )
     .run(
       input.url,
@@ -338,6 +358,7 @@ export function insertSite(input: {
       input.checkIntervalSeconds,
       input.degradedMs ?? 5000,
       input.expectedStatus ?? null,
+      input.logSlug ?? null,
     )
   return getSite(result.lastInsertRowid as number)!
 }
@@ -351,6 +372,7 @@ export function updateSite(
     enabled: boolean
     degradedMs: number
     expectedStatus: number | null
+    logSlug: string | null
   }>,
 ): Site | null {
   const current = getSite(id)
@@ -358,7 +380,7 @@ export function updateSite(
 
   getDb()
     .prepare(
-      `UPDATE sites SET url = ?, name = ?, check_interval_seconds = ?, enabled = ?, degraded_ms = ?, expected_status = ? WHERE id = ?`,
+      `UPDATE sites SET url = ?, name = ?, check_interval_seconds = ?, enabled = ?, degraded_ms = ?, expected_status = ?, log_slug = ? WHERE id = ?`,
     )
     .run(
       patch.url ?? current.url,
@@ -367,6 +389,7 @@ export function updateSite(
       (patch.enabled ?? current.enabled) ? 1 : 0,
       patch.degradedMs ?? current.degradedMs,
       patch.expectedStatus === undefined ? current.expectedStatus : patch.expectedStatus,
+      patch.logSlug === undefined ? current.logSlug : patch.logSlug,
       id,
     )
   return getSite(id)

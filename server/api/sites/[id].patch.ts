@@ -1,4 +1,5 @@
 import { buildSiteSummary, getSite, updateSite } from '../../utils/db'
+import { normalizeLogSlug } from '../../utils/logs/slug'
 import { normalizeSiteUrl } from '../../utils/url'
 import { scheduleSite, unscheduleSite } from '../../utils/scheduler'
 
@@ -22,6 +23,7 @@ export default defineEventHandler(async (event) => {
     enabled?: boolean
     degradedMs?: number
     expectedStatus?: number | null
+    logSlug?: string | null
   }>(event)
 
   const patch: Parameters<typeof updateSite>[1] = {}
@@ -52,6 +54,13 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 400, statusMessage: 'Invalid expected status' })
     }
     patch.expectedStatus = body.expectedStatus
+  }
+  if (body.logSlug !== undefined) {
+    const logSlug = normalizeLogSlug(body.logSlug)
+    if (logSlug === undefined) {
+      throw createError({ statusCode: 400, statusMessage: 'Invalid log folder name' })
+    }
+    patch.logSlug = logSlug
   }
 
   const site = updateSite(id, patch)!
