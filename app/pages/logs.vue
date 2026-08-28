@@ -389,46 +389,50 @@ async function purgeFolder(slug: string) {
       </template>
 
       <template #detail="{ row }">
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-[720px] border-collapse text-xs">
-            <thead>
-              <tr class="text-left text-tertiary uppercase">
-                <th class="py-1.5 pr-4 font-semibold">File</th>
-                <th class="py-1.5 pr-4 font-semibold">Type</th>
-                <th class="py-1.5 pr-4 font-semibold">Server</th>
-                <th class="py-1.5 pr-4 text-right font-semibold">Size</th>
-                <th class="py-1.5 pr-4 text-right font-semibold">Progress</th>
-                <th class="py-1.5 pr-4 text-right font-semibold">Lines</th>
-                <th class="py-1.5 pr-4 text-right font-semibold">Errors</th>
-                <th class="py-1.5 pr-4 font-semibold">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="file in row.files" :key="file.path" class="border-t border-border-default">
-                <td class="py-1.5 pr-4 font-mono">
-                  {{ file.filename }}
-                  <span v-if="file.compressed" class="text-tertiary">· gz</span>
-                </td>
-                <td class="py-1.5 pr-4 text-tertiary">{{ file.logType }}</td>
-                <td class="py-1.5 pr-4 font-mono text-tertiary">{{ file.env }}/{{ file.ip }}</td>
-                <td class="py-1.5 pr-4 text-right tabular-nums">{{ formatBytes(file.size) }}</td>
-                <td class="py-1.5 pr-4 text-right tabular-nums">{{ filePct(file) }}%</td>
-                <td class="py-1.5 pr-4 text-right tabular-nums">{{ formatCount(file.linesIngested) }}</td>
-                <td
-                  class="py-1.5 pr-4 text-right tabular-nums"
-                  :class="file.parseErrors > 0 ? 'text-degraded' : 'text-tertiary'"
-                >
-                  {{ formatCount(file.parseErrors) }}
-                </td>
-                <td class="py-1.5 pr-4">
-                  <UiBadge :tone="fileStatusTone(file.status)">{{ file.status }}</UiBadge>
-                  <span v-if="file.lastError" class="mt-1 block max-w-[320px] truncate text-down" :title="file.lastError">
-                    {{ file.lastError }}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="flex flex-col gap-4">
+          <LogsTrafficOverview :slug="row.slug" :site-id="row.linkedSite?.id ?? null" />
+
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[720px] border-collapse text-xs">
+              <thead>
+                <tr class="text-left text-tertiary uppercase">
+                  <th class="py-1.5 pr-4 font-semibold">File</th>
+                  <th class="py-1.5 pr-4 font-semibold">Type</th>
+                  <th class="py-1.5 pr-4 font-semibold">Server</th>
+                  <th class="py-1.5 pr-4 text-right font-semibold">Size</th>
+                  <th class="py-1.5 pr-4 text-right font-semibold">Progress</th>
+                  <th class="py-1.5 pr-4 text-right font-semibold">Lines</th>
+                  <th class="py-1.5 pr-4 text-right font-semibold">Errors</th>
+                  <th class="py-1.5 pr-4 font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="file in row.files" :key="file.path" class="border-t border-border-default">
+                  <td class="py-1.5 pr-4 font-mono">
+                    {{ file.filename }}
+                    <span v-if="file.compressed" class="text-tertiary">· gz</span>
+                  </td>
+                  <td class="py-1.5 pr-4 text-tertiary">{{ file.logType }}</td>
+                  <td class="py-1.5 pr-4 font-mono text-tertiary">{{ file.env }}/{{ file.ip }}</td>
+                  <td class="py-1.5 pr-4 text-right tabular-nums">{{ formatBytes(file.size) }}</td>
+                  <td class="py-1.5 pr-4 text-right tabular-nums">{{ filePct(file) }}%</td>
+                  <td class="py-1.5 pr-4 text-right tabular-nums">{{ formatCount(file.linesIngested) }}</td>
+                  <td
+                    class="py-1.5 pr-4 text-right tabular-nums"
+                    :class="file.parseErrors > 0 ? 'text-degraded' : 'text-tertiary'"
+                  >
+                    {{ formatCount(file.parseErrors) }}
+                  </td>
+                  <td class="py-1.5 pr-4">
+                    <UiBadge :tone="fileStatusTone(file.status)">{{ file.status }}</UiBadge>
+                    <span v-if="file.lastError" class="mt-1 block max-w-[320px] truncate text-down" :title="file.lastError">
+                      {{ file.lastError }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </template>
     </LogsDataTable>

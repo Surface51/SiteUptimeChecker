@@ -70,6 +70,51 @@ export function useLogFilters() {
   return { range, env, from, to, hours, query, setRange, setEnv, refresh }
 }
 
+/**
+ * Same shape as {@link useLogFilters}, but backed by local refs instead of the route query —
+ * for embedding a log view somewhere that isn't the logs shell and shouldn't hijack that page's
+ * URL (e.g. an expanded row on the folder-status page, where several views could be open at once).
+ */
+export function useLocalLogFilters(initialRange: string = DEFAULT_RANGE): LogFilters {
+  const rangeState = ref(
+    LOG_RANGE_PRESETS.some((p) => p.value === initialRange) ? initialRange : DEFAULT_RANGE,
+  )
+  const envState = ref<string | undefined>(undefined)
+  const range = computed(() => rangeState.value)
+  const env = computed(() => envState.value)
+
+  const anchor = ref(Date.now())
+  watch(range, () => {
+    anchor.value = Date.now()
+  })
+
+  const hours = computed(
+    () => LOG_RANGE_PRESETS.find((p) => p.value === range.value)?.hours ?? 24 * 7,
+  )
+  const from = computed(() => new Date(anchor.value - hours.value * 3_600_000).toISOString())
+  const to = computed(() => new Date(anchor.value).toISOString())
+
+  const query = computed(() => ({
+    from: from.value,
+    to: to.value,
+    ...(env.value ? { env: env.value } : {}),
+  }))
+
+  function setRange(value: string) {
+    rangeState.value = value
+  }
+
+  function setEnv(value: string | undefined) {
+    envState.value = value
+  }
+
+  function refresh() {
+    anchor.value = Date.now()
+  }
+
+  return { range, env, from, to, hours, query, setRange, setEnv, refresh }
+}
+
 export type LogFilters = ReturnType<typeof useLogFilters>
 
 /** The logs shell owns one instance and provides it; every tab reads that same window. */
