@@ -144,6 +144,24 @@ describe('runIngest', () => {
     expect(status.filesSkipped).toBe(1)
     expect(await countAccessRows()).toBe(4)
   })
+
+  it('settles an empty file to done rather than leaving it pending', async () => {
+    writeFileSync(join(root, ...SERVER_DIR, 'nginx-access.log'), '')
+
+    await runIngest([root])
+
+    // Nothing to parse, but the bookkeeping must not sit at 'pending' forever — the /logs
+    // status page counts a non-terminal status as an unfinished file.
+    const state = await fileState()
+    expect(state.status).toBe('done')
+    expect(state.byte_offset).toBe(0)
+
+    // A later run leaves it alone, and content added afterwards still ingests.
+    writeAccessLog(seedLines(3))
+    const status = await runIngest([root])
+    expect(status.errors).toEqual([])
+    expect(await countAccessRows()).toBe(3)
+  })
 })
 
 describe('pruneLogRetention', () => {

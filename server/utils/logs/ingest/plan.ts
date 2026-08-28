@@ -26,6 +26,28 @@ export async function planFile(
   file: DiscoveredFile,
   serverId: number,
 ): Promise<FilePlan> {
+  const plan = await resolvePlan(conn, file, serverId)
+
+  // A file with nothing to read (an empty file, or a live file with no new bytes) never
+  // reaches the ingest loop that moves its bookkeeping to a terminal status — its freshly
+  // inserted row would sit at 'pending' forever, and the /logs page would keep counting it as
+  // unfinished. Settle it to 'done' here. An errored row is left alone, and so is a log type
+  // with no parser (nothing could ever ingest it).
+  if (!plan.needsIngest && tableForLogType(file.classified.logType)) {
+    await conn.run(
+      `UPDATE ingest_files SET status = 'done', updated_at = now()
+       WHERE file_id = $fileId AND status NOT IN ('done', 'error')`,
+      { fileId: plan.fileId },
+    )
+  }
+  return plan
+}
+
+async function resolvePlan(
+  conn: DuckDBConnection,
+  file: DiscoveredFile,
+  serverId: number,
+): Promise<FilePlan> {
   const headHash = computeHeadHash(file.absPath)
   const existing = await getFileRecord(conn, file.absPath)
 
