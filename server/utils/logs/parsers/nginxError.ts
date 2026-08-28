@@ -1,6 +1,6 @@
 import type { LineParser, NginxErrorAggRow } from './types'
 import { parseNginxErrorTimestamp } from './dates'
-import { fingerprintMessage } from '../fingerprint/message'
+import { ErrorAggregator } from './errorAgg'
 
 const LINE_RE = /^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\] \d+#\d+: (?:\*\d+ )?(.*)$/
 // The trailing ", client: ..., server: ..., request: \"...\"[, upstream: \"...\"][, host: \"...\"][, referrer: \"...\"]"
@@ -26,22 +26,12 @@ function parseTail(rest: string): { message: string; fields: Record<string, stri
   return { message, fields }
 }
 
-interface AggEntry {
-  bucket: Date
-  level: string
-  fingerprint: string
-  count: number
-  sampleMessage: string
-  sampleRequest: string | null
-  sampleHost: string | null
-}
-
 /** Aggregates nginx error lines into per-minute/level/fingerprint counts as they stream in,
- * since a single alert (e.g. "worker_connections are not enough") can repeat millions of times. */
+ * since a single alert (e.g. "worker_connections are not enough") can repeat millions of times.
+ * The bucketing itself lives in the shared {@link ErrorAggregator}. */
 export class NginxErrorParser implements LineParser<NginxErrorAggRow> {
   private errorCount = 0
-  private currentBucketMs: number | null = null
-  private bucketMap = new Map<string, AggEntry>()
+  private agg = new ErrorAggregator()
 
   feedLine(line: string): NginxErrorAggRow[] {
     if (!line) return []
@@ -59,49 +49,21 @@ export class NginxErrorParser implements LineParser<NginxErrorAggRow> {
     }
 
     const { message, fields } = parseTail(rest)
-    const sampleRequest = fields.request || null
-    const sampleHost = fields.host || null
-
-    const fingerprint = fingerprintMessage(message)
-    const bucketMs = Math.floor(ts.getTime() / 60_000) * 60_000
-
-    let flushed: NginxErrorAggRow[] = []
-    if (this.currentBucketMs !== null && bucketMs !== this.currentBucketMs) {
-      flushed = this.drain()
-    }
-    this.currentBucketMs = bucketMs
-
-    const key = `${level}|${fingerprint}`
-    const existing = this.bucketMap.get(key)
-    if (existing) {
-      existing.count++
-    } else {
-      this.bucketMap.set(key, {
-        bucket: new Date(bucketMs),
-        level,
-        fingerprint,
-        count: 1,
-        sampleMessage: message,
-        sampleRequest,
-        sampleHost
-      })
-    }
-
-    return flushed
+    return this.agg.add({
+      ts,
+      level,
+      message,
+      sampleRequest: fields.request || null,
+      sampleHost: fields.host || null,
+    })
   }
 
   flush(): NginxErrorAggRow[] {
-    return this.drain()
+    return this.agg.flush()
   }
 
   hasPendingState(): boolean {
-    return this.bucketMap.size > 0
-  }
-
-  private drain(): NginxErrorAggRow[] {
-    const rows = Array.from(this.bucketMap.values())
-    this.bucketMap.clear()
-    return rows
+    return this.agg.hasPending()
   }
 
   getErrorCount(): number {

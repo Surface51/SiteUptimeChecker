@@ -42,6 +42,20 @@ export function parsePhpTimestamp(raw: string): Date | null {
   return new Date(Date.UTC(Number(year), monthIdx, Number(day), Number(hh), Number(mm), Number(ss)))
 }
 
+const APACHE_ERROR_TS = /^\w{3} (\w{3}) +(\d{1,2}) (\d{2}):(\d{2}):(\d{2})(?:\.\d+)? (\d{4})$/
+
+/** Parses Apache's error-log "Wed Aug 27 10:00:00.123456 2026" timestamp (the surrounding
+ * brackets stripped by the caller; day is space-padded, sub-second part optional). No zone in
+ * the format — assumed UTC, same as the nginx error log. Sub-second precision is discarded. */
+export function parseApacheErrorTimestamp(raw: string): Date | null {
+  const m = APACHE_ERROR_TS.exec(raw)
+  if (!m) return null
+  const monAbbr = m[1]!, day = m[2]!, hh = m[3]!, mm = m[4]!, ss = m[5]!, year = m[6]!
+  const monthIdx = MONTHS[monAbbr]
+  if (monthIdx === undefined) return null
+  return new Date(Date.UTC(Number(year), monthIdx, Number(day), Number(hh), Number(mm), Number(ss)))
+}
+
 const MYSQLD_TS = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2}):(\d{2})$/
 
 /** Parses mysqld.log's "2025-08-31  6:16:15" timestamp (variable-width hour). */

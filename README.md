@@ -18,27 +18,35 @@ log-ingress/<name>/<env>/<server-ip>/<logfile>
 ```
 
 `<name>` is the folder you link a monitored site to, `<env>` is anything you like (`live`,
-`staging`, …), and `<server-ip>` must look like an IP address — that is how a server directory is
-told apart from anything else. Symlinks are followed, so the logs can live wherever they already
-are on the box.
+`staging`, …), and `<server-ip>` is the server directory — an IP address or a hostname. Symlinks
+are followed, so the logs can live wherever they already are on the box.
 
 Recognised filenames (with optional `-YYYYMMDD` rotation suffix and `.gz`):
 
 ```
-nginx-access.log   nginx-error.log   error.log
-php-error.log      php-fpm-error.log php-slow.log
-mysqld-slow-query.log                mysqld.log
+nginx-access.log    apache-access.log    nginx-error.log    apache-error.log    error.log
+php-error.log       php-fpm-error.log    php-slow.log
+mysqld-slow-query.log                    mysqld.log
 ```
+
+An access-log base name may carry a `__tag` (e.g. `apache-access__ssl.log`,
+`apache-access__example_com.log`) so one server directory can hold several access logs — an HTTP
+domlog and an `-ssl_log`, or one per vhost — without colliding.
 
 To attach the folder to a monitored site, open the site, choose **Edit**, and pick it under
 **Log folder**. Folders that aren't linked to any site are still ingested and can be queried at
 `/api/logs/<name>/…`.
 
-> **nginx access format.** The parser expects the format these logs are produced in: a double
-> space after the timestamp and a trailing quoted `X-Forwarded-For` chain, from which the real
-> client IP is taken. Standard combined-format lines will not match and are counted as parse
-> errors — the ingest panel shows the count per run, so a format mismatch is visible rather than
-> silent.
+> **Access-log formats.** `nginx-access.log` must be in the Pantheon-style format these logs are
+> produced in: a double space after the timestamp and a trailing quoted `X-Forwarded-For` chain,
+> from which the real client IP is taken. `apache-access.log` accepts Apache's stock `common`,
+> `combined` and `vhost_combined` (with an optional trailing `%D`/`%T`) and takes the client IP
+> from `%h` directly — behind a proxy/CDN that is the proxy address unless `mod_remoteip` rewrites
+> it upstream. Lines that match neither are counted as parse errors, shown per run on the ingest
+> panel.
+>
+> **Apache error timestamps** carry no timezone and are read as UTC (same as nginx's). Correct
+> for UTC servers; a cPanel box on local time will be offset.
 
 ### Ingestion
 
@@ -89,6 +97,38 @@ Key flags: `--jobs`, `--memory <n%|nGB>`, `--threads`, `--site <slug>` (repeatab
 (abort a server-side run during the handoff), `--no-server`, `--dry-run`, `--keep-temp`,
 `--no-progress`. `--help` lists them all. Log alerts are left to the server's next tick.
 
+### `npm run logs:sync`
+
+Pulls live logs into `log-ingress/` over `rsync`/`ssh` so ingestion has something to read. It
+never opens the DuckDB store, so it is safe to run alongside the server or `logs:ingest`. Driven
+by one config file — copy `log-sync.config.example.json` to `log-sync.config.json` (gitignored):
+
+- **`pantheon`** — lists every accessible site with one `terminus site:list` call, keeps the
+  non-frozen ones whose plan isn't in `excludePlans` (default `["Sandbox"]`, so Basic +
+  Performance sync), resolves each `live` env's appserver/dbserver containers by DNS, and pulls
+  `logs/nginx/`, `logs/php/` and (with `includeDb`) the dbserver `logs/` into
+  `log-ingress/<folder>/live/<container-ip>/`. `alias` maps a Pantheon site name to a different
+  folder (e.g. `charles-ives-society` → `charles-ives`); `include`/`exclude` narrow the set.
+- **`servers`** — a `folder → { env, sources[] }` map for anything else. Each source is one SSH
+  host with explicit `paths`, every entry a `{ remote, as }` pair where `remote` is a file or a
+  glob and `as` is the canonical local name (validated against the recognised filenames at load).
+  A glob's matches are renamed `<as>-<YYYYMMDD>[.gz]`, the date taken from the remote name or its
+  mtime; two matches wanting the same local name is an error, never a silent overwrite.
+
+```bash
+npm run logs:sync -- --dry-run                       # list every file that would transfer
+npm run logs:sync -- --site pixna --site citl
+npm run logs:sync -- --only-servers --jobs 8
+npm run logs:sync -- --max-age-days 30 --then-ingest # bound a first backfill, then ingest
+```
+
+Key flags: `--dry-run`, `--site <name>` (repeatable), `--only-pantheon`, `--only-servers`,
+`--jobs`, `--max-age-days <n>` (rotated archives only — live files always sync), `--then-ingest`,
+`--config <path>`, `--terminus <path>`, `--no-progress`. Transfers use rsync's temp-file-then-
+rename (never `--partial`/`--inplace`), so the ingester never sees a half-written file. A failed
+host is reported at the end, not fatal. Exit `0` ok, `1` some transfers failed, `2` config
+invalid.
+
 ### Configuration
 
 | Variable | Default | Purpose |
@@ -102,6 +142,8 @@ Key flags: `--jobs`, `--memory <n%|nGB>`, `--threads`, `--site <slug>` (repeatab
 | `UPTIME_URL` | `http://localhost:3000` | Server base URL the `logs:ingest` CLI hands off to |
 | `UPTIME_CLI_TOKEN` | unset | If set, the DB-handoff endpoints require `Authorization: Bearer <it>` instead of being loopback-only |
 | `UPTIME_INGEST_MEMORY` | `70%` | Default total DuckDB memory budget for `logs:ingest` |
+| `UPTIME_LOG_SYNC_CONFIG` | `./log-sync.config.json` | Config file read by `logs:sync` |
+| `UPTIME_TERMINUS_BIN` | `terminus` | Path to the `terminus` binary `logs:sync` shells out to |
 
 Retention deletes old log rows but deliberately keeps the ingest bookkeeping for files that still
 exist, so a pruned file is not simply re-ingested on the next run.

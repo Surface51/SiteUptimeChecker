@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "logs:ingest:build": "node scripts/logs-ingest/build.mjs",
-    "logs:ingest": "node scripts/logs-ingest/build.mjs && node .output/logs-ingest/cli.js"
+    "logs:ingest": "node scripts/logs-ingest/build.mjs && node .output/logs-ingest/cli.js",
+    "logs:sync:build": "node scripts/logs-sync/build.mjs",
+    "logs:sync": "node scripts/logs-sync/build.mjs && node .output/logs-sync/cli.js"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.5-r.4",

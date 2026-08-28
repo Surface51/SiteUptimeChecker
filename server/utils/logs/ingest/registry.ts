@@ -3,6 +3,8 @@ import type { LogType } from '../discovery'
 import type { LineParser } from '../parsers/types'
 import { NginxAccessParser } from '../parsers/nginxAccess'
 import { NginxErrorParser } from '../parsers/nginxError'
+import { ApacheAccessParser } from '../parsers/apacheAccess'
+import { ApacheErrorParser } from '../parsers/apacheError'
 import { PhpErrorParser } from '../parsers/phpError'
 import { PhpFpmParser } from '../parsers/phpFpm'
 import { PhpSlowParser } from '../parsers/phpSlow'
@@ -33,7 +35,9 @@ export interface ParserSpec {
  */
 export const PARSER_REGISTRY: Partial<Record<LogType, ParserSpec>> = {
   nginx_access: { table: 'access_log', createParser: () => new NginxAccessParser(), appendRow: appendAccessRow },
+  apache_access: { table: 'access_log', createParser: () => new ApacheAccessParser(), appendRow: appendAccessRow },
   nginx_error: { table: 'nginx_error_agg', createParser: () => new NginxErrorParser(), appendRow: appendNginxErrorAggRow },
+  apache_error: { table: 'nginx_error_agg', createParser: () => new ApacheErrorParser(), appendRow: appendNginxErrorAggRow },
   php_error: { table: 'php_error', createParser: () => new PhpErrorParser(), appendRow: appendPhpErrorRow },
   php_fpm_error: { table: 'fpm_events', createParser: () => new PhpFpmParser(), appendRow: appendFpmEventRow },
   php_slow: { table: 'php_slow', createParser: () => new PhpSlowParser(), appendRow: appendPhpSlowRow },

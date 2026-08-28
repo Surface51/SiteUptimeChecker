@@ -3,7 +3,9 @@ import { join } from 'node:path'
 
 export type LogType =
   | 'nginx_access'
+  | 'apache_access'
   | 'nginx_error'
+  | 'apache_error'
   | 'php_error'
   | 'php_fpm_error'
   | 'php_slow'
@@ -18,20 +20,27 @@ export interface ClassifiedFilename {
   mutable: boolean
 }
 
-// Matches: base name, optional "-YYYYMMDD" rotation suffix, optional ".gz",
-// optional trailing " <epoch>" (php-error/php-fpm-error rotate with a space + unix epoch).
+// Matches: base name, optional "__tag" (lets one server dir hold several access logs — a plain
+// domlog and an -ssl_log, or one per vhost — without filename collisions), ".log", optional
+// "-YYYYMMDD" rotation suffix, optional ".gz", optional trailing " <epoch>" (php-error /
+// php-fpm-error rotate with a space + unix epoch).
+// "mysqld-slow-query" stays ahead of "mysqld" so the longer name wins without backtracking;
+// "__" as the tag delimiter is what keeps "mysqld-slow-query.log" unambiguous ("-slow-query"
+// is not "__…").
 const FILENAME_RE =
-  /^(?<base>nginx-access\.log|nginx-error\.log|php-error\.log|php-fpm-error\.log|php-slow\.log|mysqld-slow-query\.log|mysqld\.log|error\.log)(?:-(?<date>\d{8}))?(?:\.gz)?(?: (?<epoch>\d+))?$/
+  /^(?<base>nginx-access|apache-access|nginx-error|apache-error|php-error|php-fpm-error|php-slow|mysqld-slow-query|mysqld|error)(?<tag>__[A-Za-z0-9][A-Za-z0-9_]*)?\.log(?:-(?<date>\d{8}))?(?:\.gz)?(?: (?<epoch>\d+))?$/
 
 const BASE_TO_TYPE: Record<string, LogType> = {
-  'nginx-access.log': 'nginx_access',
-  'nginx-error.log': 'nginx_error',
-  'error.log': 'nginx_error',
-  'php-error.log': 'php_error',
-  'php-fpm-error.log': 'php_fpm_error',
-  'php-slow.log': 'php_slow',
-  'mysqld-slow-query.log': 'mysqld_slow',
-  'mysqld.log': 'mysqld'
+  'nginx-access': 'nginx_access',
+  'apache-access': 'apache_access',
+  'nginx-error': 'nginx_error',
+  'apache-error': 'apache_error',
+  'error': 'nginx_error',
+  'php-error': 'php_error',
+  'php-fpm-error': 'php_fpm_error',
+  'php-slow': 'php_slow',
+  'mysqld-slow-query': 'mysqld_slow',
+  'mysqld': 'mysqld'
 }
 
 export function classifyFilename(filename: string): ClassifiedFilename | null {
@@ -64,8 +73,16 @@ export interface DiscoveredFile {
   mtime: Date
 }
 
-function isIpLike(name: string): boolean {
-  return /^\d{1,3}(\.\d{1,3}){3}$/.test(name) || name.includes(':') // v4 dotted or v6-ish
+// A server directory is named by its address: an IPv4 dotted quad, something v6-ish, or a
+// DNS-style hostname label (custom servers are often reached by name, not IP). A leading dot
+// is rejected so "." / ".." / ".sync-tmp" never count. Wrong guesses here are harmless — a
+// directory that passes but holds no recognised log file contributes nothing.
+function isServerDirName(name: string): boolean {
+  return (
+    /^\d{1,3}(\.\d{1,3}){3}$/.test(name) ||
+    name.includes(':') ||
+    /^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(name)
+  )
 }
 
 // A Dirent for a symlink reports neither isDirectory() nor isFile(), so both listings below
@@ -105,7 +122,7 @@ export function discoverRoot(root: string): DiscoveredFile[] {
       const envPath = join(sitePath, env)
 
       for (const ip of listEntries(envPath, 'dir')) {
-        if (!isIpLike(ip)) continue
+        if (!isServerDirName(ip)) continue
         const serverPath = join(envPath, ip)
         const files = listEntries(serverPath, 'file')
 

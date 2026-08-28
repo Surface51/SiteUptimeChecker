@@ -94,12 +94,12 @@ const phpColumns: LogColumn[] = [
     </LogsDataTable>
 
     <LogsDataTable
-      title="nginx errors"
+      title="Web server errors"
       :columns="nginxColumns"
       :rows="nginxGroups?.groups ?? []"
       :pending="nginxPending"
       row-key="fingerprint"
-      empty="No nginx errors in this range"
+      empty="No web server errors in this range"
       min-width="760px"
     >
       <template #cell-level="{ value }">

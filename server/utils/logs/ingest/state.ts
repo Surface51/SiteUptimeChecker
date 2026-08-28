@@ -1,6 +1,7 @@
 import type { DuckDBConnection } from '@duckdb/node-api'
 import { timestampValue } from '@duckdb/node-api'
 import type { DiscoveredFile, LogType } from '../discovery'
+import { PARSER_REGISTRY } from './registry'
 
 function toTs(d: Date) {
   return timestampValue(BigInt(d.getTime()) * BigInt(1000))
@@ -138,19 +139,9 @@ export async function updateFileProgress(
   )
 }
 
-const LOG_TYPE_TABLE: Partial<Record<LogType, string>> = {
-  nginx_access: 'access_log',
-  nginx_error: 'nginx_error_agg',
-  php_error: 'php_error',
-  php_fpm_error: 'fpm_events',
-  php_slow: 'php_slow',
-  mysqld_slow: 'mysql_slow',
-  mysqld: 'db_events'
-}
-
 /** A rotated/truncated live file: wipe its previously-ingested rows and restart from byte 0. */
 export async function resetFileForRotation(conn: DuckDBConnection, fileId: number, logType: LogType) {
-  const table = LOG_TYPE_TABLE[logType]
+  const table = tableForLogType(logType)
   if (table) {
     await conn.run(`DELETE FROM ${table} WHERE file_id = $fileId`, { fileId })
   }
@@ -162,6 +153,9 @@ export async function resetFileForRotation(conn: DuckDBConnection, fileId: numbe
   )
 }
 
+/** The DuckDB table a log type's rows land in — the single source is `PARSER_REGISTRY`, so a
+ * new log type can't be half-registered (parser wired, rotation-reset silently skipping its
+ * DELETE and duplicating rows on the next rotation). */
 export function tableForLogType(logType: LogType): string | undefined {
-  return LOG_TYPE_TABLE[logType]
+  return PARSER_REGISTRY[logType]?.table
 }

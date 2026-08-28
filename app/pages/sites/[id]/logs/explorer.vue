@@ -12,7 +12,7 @@ const TABLES = [
   { label: 'FPM events', value: 'fpm_events' },
   { label: 'PHP slow', value: 'php_slow' },
   { label: 'MySQL slow', value: 'mysql_slow' },
-  { label: 'nginx errors', value: 'nginx_error_agg' },
+  { label: 'Web server errors', value: 'nginx_error_agg' },
   { label: 'DB events', value: 'db_events' },
 ]
 
