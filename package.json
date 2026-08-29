@@ -29,6 +29,7 @@
     "lighthouse": "^13.4.0",
     "luxon": "^3.7.2",
     "nuxt": "^4.4.8",
+    "nuxt-anime": "^0.1.13",
     "playwright": "^1.61.1",
     "tailwindcss": "^4.3.3",
     "ua-parser-js": "^1.0.41",
@@ -39,9 +40,9 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "esbuild": "^0.28.1",
     "@types/geoip-lite": "^1.4.4",
     "@types/luxon": "^3.7.5",
+    "esbuild": "^0.28.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10",
     "vue-tsc": "^3.3.7"

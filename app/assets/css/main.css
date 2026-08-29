@@ -190,4 +190,15 @@
     line-height: 1;
     user-select: none;
   }
+
+  /* Pre-paint splash cover. Set by the critical script in nuxt.config before the
+     client-only AppSplash overlay mounts, so SSR'd content never flashes first.
+     --surface-page has already been flipped by the theme script above. */
+  html[data-splash="pending"]::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: var(--surface-page);
+    z-index: 90;
+  }
 }

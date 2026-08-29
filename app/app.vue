@@ -1,6 +1,7 @@
 <template>
   <div class="flex min-h-screen flex-col bg-page text-primary lg:flex-row">
     <NuxtRouteAnnouncer />
+    <ClientOnly><AppSplash /></ClientOnly>
     <ToastHost />
     <LighthouseProgressPanel />
     <AppSidebar />

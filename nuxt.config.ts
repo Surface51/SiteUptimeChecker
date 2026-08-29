@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
+  modules: ['nuxt-anime'],
   css: ['~/assets/css/main.css'],
   app: {
     head: {
@@ -28,6 +29,15 @@ export default defineNuxtConfig({
           // Applies the persisted theme before first paint. Without this the
           // server-rendered (light) markup flashes before the client hydrates.
           innerHTML: `(function(){try{var t=localStorage.getItem('siteUptime.theme');var d=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.setAttribute('data-theme','dark')}catch(e){}})()`,
+          tagPriority: 'critical',
+        },
+        {
+          // Marks the splash as pending before first paint, so the SSR'd app never
+          // flashes in the frame before the client-only overlay mounts. Cleared by
+          // AppSplash on finish, and never set at all after the first load of a session.
+          // If sessionStorage throws, the attribute stays unset and the app renders
+          // normally rather than sitting behind a cover nothing clears.
+          innerHTML: `(function(){try{if(!sessionStorage.getItem('siteUptime.splashSeen'))document.documentElement.setAttribute('data-splash','pending')}catch(e){}})()`,
           tagPriority: 'critical',
         },
       ],
