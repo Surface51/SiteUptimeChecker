@@ -1,5 +1,6 @@
 import type { NotificationType } from '#shared/types'
-import { getDb, insertNotification, listSites } from '../db'
+import { insertNotification, listSites } from '../db'
+import { claimAlert as claimAlertShared } from '../alertState'
 import { rangeParams, serverIdsClause, resolveLogServers, type LogScope } from './apiHelpers'
 import { queryLogs } from './logDb'
 
@@ -20,25 +21,7 @@ const SPIKE_FACTOR = 3
 
 /** True when this alert hasn't fired within the cooldown, recording the firing if so. */
 function claimAlert(siteId: number, type: NotificationType, fingerprint = ''): boolean {
-  const db = getDb()
-  const existing = db
-    .prepare(
-      `SELECT last_fired_at FROM log_alert_state
-       WHERE site_id = ? AND alert_type = ? AND fingerprint = ?
-         AND last_fired_at > datetime('now', ?)`,
-    )
-    .get(siteId, type, fingerprint, `-${COOLDOWN_HOURS} hours`)
-
-  if (existing) return false
-
-  db.prepare(
-    `INSERT INTO log_alert_state (site_id, alert_type, fingerprint, last_fired_at)
-     VALUES (?, ?, ?, datetime('now'))
-     ON CONFLICT(site_id, alert_type, fingerprint)
-     DO UPDATE SET last_fired_at = datetime('now')`,
-  ).run(siteId, type, fingerprint)
-
-  return true
+  return claimAlertShared(siteId, type, fingerprint, COOLDOWN_HOURS)
 }
 
 function scopeFor(serverIds: number[], hoursAgo: number, untilHoursAgo = 0): LogScope {

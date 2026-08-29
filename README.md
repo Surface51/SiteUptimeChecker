@@ -3,6 +3,57 @@
 Uptime monitoring (checks, incidents, SSL, Lighthouse, WHOIS/DNS, screenshots) plus web-log
 analytics for the same sites, in one dashboard.
 
+## Monitoring
+
+### Per-site check options
+
+Beyond URL, interval and the degraded-response threshold, each site (Edit → the collapsible
+sections) can carry:
+
+- **Content assertions** — "body must contain / must not contain / must match (regex) / minimum
+  size". Any failing assertion marks the check **down** regardless of the status code, and the
+  assertion text becomes the incident cause. The regex is capped at 200 characters and only ever
+  run against the first 256 KB of the body.
+- **Request options** — HTTP method, custom headers (JSON object), request body, basic-auth
+  credentials, a per-site timeout, a follow-redirects toggle, and an accepted-status expression
+  (`200`, `200,204`, `200-299`, `2xx,3xx`) that takes precedence over the single "expected
+  status".
+- **Adaptive degraded threshold** — instead of a fixed millisecond number, flag a response that
+  exceeds twice the trailing-7-day p95 (floored at 500 ms). Falls back to the fixed value until
+  three days of rollups exist.
+- **Content-change watch** — chunk-hashes the normalised body each check and raises a
+  `content_changed` notification when more than *N%* of chunks differ from the last snapshot.
+- **SLA target** — a percentage (e.g. `99.9`). When set, the site page shows an error-budget
+  panel (achieved vs target, budget consumed, MTTR/MTBF, a 12-month trend) and the site appears
+  on the fleet `/triage` page once the budget is blown.
+
+> **Basic-auth passwords are stored in plaintext** in the local SQLite database, consistent with
+> an app that has no login and a trusted-network deployment model. The password is never sent
+> back to the browser (`hasAuthPass: true/false` is all the API exposes) and is only read
+> server-side when a check runs. Clear it from the Edit form's "Clear stored password" box.
+
+### Daily rollups & retention
+
+Raw `checks` rows are pruned after ~30 days by a once-a-day job (previously a delete on every
+insert). Before pruning, that job writes a `daily_uptime` rollup per site per day — time-weighted
+downtime, check counts and response-time percentiles — so the 90-day calendar, the adaptive
+baseline and the SLA panel keep working past the raw-row horizon. On upgrade, existing history
+still in `checks` is backfilled once at startup.
+
+### Domain & certificate alerts
+
+WHOIS expiry and DNS snapshots (already collected weekly) now raise notifications:
+`domain_expiring` at the 60/30/14/7-day marks, `nameservers_changed` when the NS set changes, and
+`ssl_issuer_changed` when a renewed certificate switches CA. All are suppressed during a
+maintenance window.
+
+### Triage & command palette
+
+`/triage` is a fleet-wide, severity-ranked list of everything that wants attention — open
+incidents, failing assertions, expiring certs/domains, recent content changes, degraded sites,
+blown SLA budgets, recent log alerts, and paused or stale monitors. Press **⌘K / Ctrl-K**
+anywhere for a fuzzy jump to any site, page, log tab or quick action.
+
 ## Log analytics
 
 Log data lives in its own DuckDB store at `.data/logs.duckdb`, separate from the SQLite database
@@ -134,6 +185,7 @@ invalid.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `UPTIME_DATA_DIR` | `./.data` | Holds both databases, screenshots and the geoip mirror |
+| `UPTIME_ROLLUP_RETENTION_DAYS` | `730` | `daily_uptime` rollup rows older than this are pruned daily (raw `checks` keep their own ~30-day window) |
 | `UPTIME_LOG_INGRESS_DIR` | `./log-ingress` | Where log folders are looked for |
 | `UPTIME_LOG_RETENTION_DAYS` | `90` | Log rows older than this are pruned daily |
 | `UPTIME_LOG_WATCH` | unset | Set to `1` to also ingest on file changes (chokidar) |

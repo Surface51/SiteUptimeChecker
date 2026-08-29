@@ -9,8 +9,14 @@ import type {
   MaintenanceWindowRow,
   NotificationRow,
   SiteSummary,
+  SlaReport,
   WhoisRecord,
 } from '#shared/types'
+import {
+  emptySiteSettings,
+  siteSettingsFromSite,
+  siteSettingsToBody,
+} from '~/utils/siteSettingsPayload'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,6 +44,11 @@ const { data: dailyUptime } = await useFetch<DailyUptime[]>(
 const { data: maintenanceWindows, refresh: refreshMaintenance } = await useFetch<MaintenanceWindowRow[]>(
   () => `/api/sites/${id.value}/maintenance`,
   { default: () => [] },
+)
+
+const { data: sla, refresh: refreshSla } = await useFetch<SlaReport | null>(
+  () => `/api/sites/${id.value}/sla`,
+  { default: () => null },
 )
 
 useHead({ title: () => (site.value ? site.value.name || site.value.url : 'Site Uptime') })
@@ -102,6 +113,7 @@ onMounted(() => {
     refreshMaintenance()
     refreshWhois()
     refreshDns()
+    refreshSla()
   }, 30_000)
 })
 onUnmounted(() => {
@@ -148,30 +160,13 @@ async function togglePaused() {
 }
 
 const isEditing = ref(false)
-const editUrl = ref('')
-const editName = ref('')
-const editInterval = ref(300)
-const editDegradedMs = ref(5000)
-const editExpectedStatus = ref('')
-const editLogSlug = ref('')
 const editError = ref('')
 const saving = ref(false)
-
-const intervalOptions = [
-  { label: 'Every 1 minute', value: 60 },
-  { label: 'Every 5 minutes', value: 300 },
-  { label: 'Every 15 minutes', value: 900 },
-  { label: 'Every hour', value: 3600 },
-]
+const editPayload = ref(emptySiteSettings())
 
 function startEdit() {
   if (!site.value) return
-  editUrl.value = site.value.url
-  editName.value = site.value.name || ''
-  editInterval.value = site.value.checkIntervalSeconds
-  editDegradedMs.value = site.value.degradedMs
-  editExpectedStatus.value = site.value.expectedStatus === null ? '' : String(site.value.expectedStatus)
-  editLogSlug.value = site.value.logSlug ?? ''
+  editPayload.value = siteSettingsFromSite(site.value)
   editError.value = ''
   isEditing.value = true
 }
@@ -182,14 +177,7 @@ async function saveEdit() {
   try {
     await $fetch(`/api/sites/${id.value}`, {
       method: 'PATCH',
-      body: {
-        url: editUrl.value.trim(),
-        name: editName.value.trim() || null,
-        checkIntervalSeconds: editInterval.value,
-        degradedMs: editDegradedMs.value,
-        expectedStatus: editExpectedStatus.value.trim() === '' ? null : Number(editExpectedStatus.value),
-        logSlug: editLogSlug.value || null,
-      },
+      body: siteSettingsToBody(editPayload.value, { includeUrl: true }),
     })
     isEditing.value = false
     await refreshSite()
@@ -290,23 +278,10 @@ async function removeSite() {
 
       <form v-if="isEditing" class="flex flex-col gap-4 border-t border-border-default p-6" @submit.prevent="saveEdit">
         <div class="flex flex-col gap-4 sm:flex-row">
-          <div class="flex-1"><UiInput v-model="editUrl" label="URL" /></div>
-          <div class="sm:w-52"><UiInput v-model="editName" label="Name" /></div>
-          <div class="sm:w-52">
-            <UiSelect v-model="editInterval" label="Interval" :options="intervalOptions" />
-          </div>
+          <div class="flex-1"><UiInput v-model="editPayload.url" label="URL" /></div>
+          <div class="sm:w-52"><UiInput v-model="editPayload.name" label="Name" /></div>
         </div>
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
-          <div class="sm:w-52">
-            <UiInput v-model="editDegradedMs" label="Degraded threshold (ms)" type="number" min="100" max="60000" />
-          </div>
-          <div class="sm:w-52">
-            <UiInput v-model="editExpectedStatus" label="Expected status (optional)" placeholder="e.g. 401" />
-          </div>
-          <div class="sm:w-72">
-            <LogSlugPicker v-model="editLogSlug" :site-id="id" />
-          </div>
-        </div>
+        <SiteSettingsForm v-model="editPayload" :site="site" hide-basics />
         <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
           <div class="flex gap-2">
             <UiButton type="submit" variant="primary" :disabled="saving">
@@ -353,6 +328,7 @@ async function removeSite() {
         <UptimeGauge label="Uptime (24h)" :value="site.uptime24h" />
         <UptimeGauge label="Uptime (7d)" :value="site.uptime7d" />
       </div>
+      <SlaPanel v-if="sla" :sla="sla" />
       <UiCard>
         <UiSectionHeading as="h3" class="mb-4">Recent checks</UiSectionHeading>
         <UptimeBar :ticks="recentTicks" />

@@ -62,9 +62,9 @@ describe('getDailyUptime', () => {
     const yesterdayKey = new Date(today.getTime() - 86400 * 1000).toISOString().slice(0, 10)
     const yesterdayBucket = daily.find((d) => d.date === yesterdayKey)
 
-    expect(todayBucket).toEqual({ date: todayKey, total: 2, uptime: 50 })
-    expect(twoDaysAgoBucket).toEqual({ date: twoDaysAgo, total: 1, uptime: 100 })
-    expect(yesterdayBucket).toEqual({ date: yesterdayKey, total: 0, uptime: null })
+    expect(todayBucket).toMatchObject({ date: todayKey, total: 2, uptime: 50 })
+    expect(twoDaysAgoBucket).toMatchObject({ date: twoDaysAgo, total: 1, uptime: 100 })
+    expect(yesterdayBucket).toMatchObject({ date: yesterdayKey, total: 0, uptime: null })
   })
 
   it('returns exactly `days` entries in ascending date order', () => {

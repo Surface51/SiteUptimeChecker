@@ -1,5 +1,6 @@
 import type { Site } from '#shared/types'
 import { getLatestDnsRecordSet, getLatestWhoisRecord, insertDnsRecordSet, insertWhoisRecord, listSites } from './db'
+import { runDomainAlerts } from './domainAlerts'
 import { runDnsRecords } from './dnsRecords'
 import { runWhois } from './whois'
 
@@ -68,6 +69,9 @@ async function runDomainInfoNow(site: Site, opts: { force?: boolean }): Promise<
   }
 
   await Promise.allSettled(jobs)
+
+  // Fresh WHOIS/DNS rows are now in place — raise expiry / nameserver-change alerts off them.
+  runDomainAlerts(site)
 }
 
 let dailyTimer: NodeJS.Timeout | null = null

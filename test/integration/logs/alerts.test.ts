@@ -77,7 +77,7 @@ describe('runLogAlerts', () => {
     expect(listNotifications({ limit: 20 }).filter((n) => n.type === 'log_5xx_spike')).toHaveLength(1)
 
     // Backdate the cooldown record rather than waiting six hours.
-    getDb().prepare(`UPDATE log_alert_state SET last_fired_at = datetime('now', '-7 hours')`).run()
+    getDb().prepare(`UPDATE alert_state SET last_fired_at = datetime('now', '-7 hours')`).run()
 
     await runLogAlerts()
     expect(listNotifications({ limit: 20 }).filter((n) => n.type === 'log_5xx_spike')).toHaveLength(2)

@@ -58,6 +58,13 @@ const securityHeaderLabels: Record<string, string> = {
       {{ check.error }}
     </div>
 
+    <div
+      v-if="check.assertionFailed"
+      class="rounded-md border border-down bg-down-tint p-3 text-sm text-down"
+    >
+      Content assertion failed: {{ check.assertionDetail }}
+    </div>
+
     <UiCard v-if="segments.length" padding="p-5">
       <h3 class="mb-4 font-display text-base font-semibold text-primary">Timing waterfall</h3>
       <div class="flex h-4 w-full overflow-hidden rounded-full bg-sunken">

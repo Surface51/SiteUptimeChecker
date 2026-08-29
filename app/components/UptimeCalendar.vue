@@ -17,7 +17,12 @@ const option = computed<EChartsOption>(() => ({
     formatter: (params: any) => {
       const day: DailyUptime | undefined = props.days.find((d) => d.date === params.data[0])
       if (!day || day.total === 0) return `${params.data[0]}<br/>No data`
-      return `${params.data[0]}<br/>${day.uptime?.toFixed(2)}% uptime (${day.total} checks)`
+      const lines = [`${params.data[0]}`, `${day.uptime?.toFixed(2)}% uptime (${day.total} checks)`]
+      if (day.downSeconds > 0) {
+        const mins = day.downSeconds / 60
+        lines.push(mins >= 60 ? `${(mins / 60).toFixed(1)}h down` : `${Math.round(mins)} min down`)
+      }
+      return lines.join('<br/>')
     },
   },
   visualMap: {

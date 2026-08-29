@@ -72,7 +72,10 @@ const allTags = computed(() => {
   return [...names].sort((a, b) => a.localeCompare(b))
 })
 
-const selectedTags = ref<string[]>([])
+const route = useRoute()
+const selectedTags = ref<string[]>(
+  typeof route.query.tags === 'string' ? route.query.tags.split(',').filter(Boolean) : [],
+)
 
 function toggleFilterTag(tag: string) {
   const idx = selectedTags.value.findIndex((t) => t.toLowerCase() === tag.toLowerCase())

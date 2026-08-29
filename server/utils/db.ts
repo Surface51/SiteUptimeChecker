@@ -1,6 +1,8 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
+import type { SiteSettings } from './siteSettings'
+import { downSecondsForDay, downSecondsInRange } from './rollup'
 import type {
   CheckRow,
   CheckStatus,
@@ -19,6 +21,7 @@ import type {
   RedirectHop,
   SecurityHeadersReport,
   Site,
+  SlaReport,
   SiteSummary,
   StatusTick,
   WhoisRecord,
@@ -56,7 +59,28 @@ export function getDb(): Database.Database {
       check_interval_seconds INTEGER NOT NULL DEFAULT 300,
       enabled INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      screenshot_updated_at TEXT
+      screenshot_updated_at TEXT,
+      degraded_ms INTEGER NOT NULL DEFAULT 5000,
+      expected_status INTEGER,
+      log_slug TEXT,
+      content_expect TEXT,
+      content_forbid TEXT,
+      content_regex TEXT,
+      content_min_bytes INTEGER,
+      http_method TEXT NOT NULL DEFAULT 'GET',
+      request_headers TEXT,
+      request_body TEXT,
+      auth_user TEXT,
+      auth_pass TEXT,
+      timeout_ms INTEGER NOT NULL DEFAULT 15000,
+      follow_redirects INTEGER NOT NULL DEFAULT 1,
+      accepted_statuses TEXT,
+      baseline_mode TEXT NOT NULL DEFAULT 'fixed',
+      content_watch INTEGER NOT NULL DEFAULT 0,
+      content_watch_sensitivity INTEGER NOT NULL DEFAULT 30,
+      body_chunks TEXT,
+      body_chunks_at TEXT,
+      sla_target REAL
     );
 
     CREATE TABLE IF NOT EXISTS checks (
@@ -85,7 +109,12 @@ export function getDb(): Database.Database {
       redirect_chain TEXT,
       security_headers TEXT,
       dns_records TEXT,
-      response_headers TEXT
+      response_headers TEXT,
+
+      assertion_failed INTEGER,
+      assertion_detail TEXT,
+      body_hash TEXT,
+      degraded_threshold_ms REAL
     );
 
     CREATE INDEX IF NOT EXISTS idx_checks_site_time ON checks(site_id, checked_at DESC);
@@ -189,11 +218,12 @@ export function getDb(): Database.Database {
 
     CREATE INDEX IF NOT EXISTS idx_site_tags_tag ON site_tags(tag_id);
 
-    -- Cooldown bookkeeping for log-derived alerts. Without it, every ingest run would
-    -- re-notify about the same ongoing 5xx spike or the same already-reported threat IP.
-    -- fingerprint distinguishes instances within a type (an IP address, say) and is ''
-    -- for alerts that are simply per-site.
-    CREATE TABLE IF NOT EXISTS log_alert_state (
+    -- Cooldown bookkeeping for raised alerts (log-derived and check-derived alike). Without
+    -- it, every ingest run or domain refresh would re-notify about the same ongoing problem.
+    -- fingerprint distinguishes instances within a type (an IP address, an expiry tier, a body
+    -- hash) and is '' for alerts that are simply per-site. Was log_alert_state before the
+    -- domain/cert/content alerts started sharing it — see migrate().
+    CREATE TABLE IF NOT EXISTS alert_state (
       site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
       alert_type TEXT NOT NULL,
       fingerprint TEXT NOT NULL DEFAULT '',
@@ -210,6 +240,25 @@ export function getDb(): Database.Database {
       paused INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- One row per site per UTC day, written by the daily rollup job (server/utils/rollup.ts).
+    -- Raw checks rows are pruned after ~30 days; this is what lets the 90-day calendar, the
+    -- adaptive response-time baseline and the SLA panel see further back than that.
+    -- down_seconds is time-weighted (incident intervals clipped to the day), not check-count.
+    CREATE TABLE IF NOT EXISTS daily_uptime (
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      day TEXT NOT NULL,
+      total_checks INTEGER NOT NULL,
+      up_checks INTEGER NOT NULL,
+      degraded_checks INTEGER NOT NULL,
+      down_checks INTEGER NOT NULL,
+      avg_ms REAL,
+      p50_ms REAL,
+      p95_ms REAL,
+      max_ms REAL,
+      down_seconds INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (site_id, day)
+    );
   `)
 
   migrate(db)
@@ -217,26 +266,63 @@ export function getDb(): Database.Database {
   return db
 }
 
-function hasColumn(db: Database.Database, table: string, column: string): boolean {
+function columnSet(db: Database.Database, table: string): Set<string> {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
-  return cols.some((c) => c.name === column)
+  return new Set(cols.map((c) => c.name))
 }
 
+function hasTable(db: Database.Database, table: string): boolean {
+  return !!db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table)
+}
+
+/**
+ * Additive, idempotent migrations for databases created before a column existed. Fresh installs
+ * (and the test DB) already have every column from the CREATE TABLE statements above, so this is
+ * three PRAGMA reads and no work in the common case. Never drops or rewrites.
+ */
 function migrate(db: Database.Database) {
-  if (!hasColumn(db, 'sites', 'degraded_ms')) {
-    db.exec(`ALTER TABLE sites ADD COLUMN degraded_ms INTEGER NOT NULL DEFAULT 5000`)
+  const siteCols = columnSet(db, 'sites')
+  const checkCols = columnSet(db, 'checks')
+  const notifCols = columnSet(db, 'notifications')
+  const add = (present: Set<string>, table: string, column: string, ddl: string) => {
+    if (!present.has(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`)
   }
-  if (!hasColumn(db, 'sites', 'expected_status')) {
-    db.exec(`ALTER TABLE sites ADD COLUMN expected_status INTEGER`)
+
+  // Pre-existing migrations.
+  add(siteCols, 'sites', 'degraded_ms', `degraded_ms INTEGER NOT NULL DEFAULT 5000`)
+  add(siteCols, 'sites', 'expected_status', `expected_status INTEGER`)
+  add(notifCols, 'notifications', 'dismissed', `dismissed INTEGER NOT NULL DEFAULT 0`)
+  add(siteCols, 'sites', 'log_slug', `log_slug TEXT`)
+
+  // The cooldown table outgrew its log-only name once domain/cert/content alerts began using it.
+  if (hasTable(db, 'log_alert_state') && !hasTable(db, 'alert_state')) {
+    db.exec(`ALTER TABLE log_alert_state RENAME TO alert_state`)
   }
-  if (!hasColumn(db, 'notifications', 'dismissed')) {
-    db.exec(`ALTER TABLE notifications ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0`)
-  }
-  // Links a site to a folder in log-ingress/ (and so to its rows in the DuckDB log store).
-  // Nullable: most sites are monitored without anyone shipping their logs here.
-  if (!hasColumn(db, 'sites', 'log_slug')) {
-    db.exec(`ALTER TABLE sites ADD COLUMN log_slug TEXT`)
-  }
+
+  // Check-depth settings — all nullable / defaulted so existing sites are unchanged.
+  add(siteCols, 'sites', 'content_expect', `content_expect TEXT`)
+  add(siteCols, 'sites', 'content_forbid', `content_forbid TEXT`)
+  add(siteCols, 'sites', 'content_regex', `content_regex TEXT`)
+  add(siteCols, 'sites', 'content_min_bytes', `content_min_bytes INTEGER`)
+  add(siteCols, 'sites', 'http_method', `http_method TEXT NOT NULL DEFAULT 'GET'`)
+  add(siteCols, 'sites', 'request_headers', `request_headers TEXT`)
+  add(siteCols, 'sites', 'request_body', `request_body TEXT`)
+  add(siteCols, 'sites', 'auth_user', `auth_user TEXT`)
+  add(siteCols, 'sites', 'auth_pass', `auth_pass TEXT`)
+  add(siteCols, 'sites', 'timeout_ms', `timeout_ms INTEGER NOT NULL DEFAULT 15000`)
+  add(siteCols, 'sites', 'follow_redirects', `follow_redirects INTEGER NOT NULL DEFAULT 1`)
+  add(siteCols, 'sites', 'accepted_statuses', `accepted_statuses TEXT`)
+  add(siteCols, 'sites', 'baseline_mode', `baseline_mode TEXT NOT NULL DEFAULT 'fixed'`)
+  add(siteCols, 'sites', 'content_watch', `content_watch INTEGER NOT NULL DEFAULT 0`)
+  add(siteCols, 'sites', 'content_watch_sensitivity', `content_watch_sensitivity INTEGER NOT NULL DEFAULT 30`)
+  add(siteCols, 'sites', 'body_chunks', `body_chunks TEXT`)
+  add(siteCols, 'sites', 'body_chunks_at', `body_chunks_at TEXT`)
+  add(siteCols, 'sites', 'sla_target', `sla_target REAL`)
+
+  add(checkCols, 'checks', 'assertion_failed', `assertion_failed INTEGER`)
+  add(checkCols, 'checks', 'assertion_detail', `assertion_detail TEXT`)
+  add(checkCols, 'checks', 'body_hash', `body_hash TEXT`)
+  add(checkCols, 'checks', 'degraded_threshold_ms', `degraded_threshold_ms REAL`)
 }
 
 export function closeDb() {
@@ -259,6 +345,35 @@ interface SiteRow {
   degraded_ms: number
   expected_status: number | null
   log_slug: string | null
+  content_expect: string | null
+  content_forbid: string | null
+  content_regex: string | null
+  content_min_bytes: number | null
+  http_method: string
+  request_headers: string | null
+  request_body: string | null
+  auth_user: string | null
+  auth_pass: string | null
+  timeout_ms: number
+  follow_redirects: number
+  accepted_statuses: string | null
+  baseline_mode: string
+  content_watch: number
+  content_watch_sensitivity: number
+  body_chunks: string | null
+  body_chunks_at: string | null
+  sla_target: number | null
+}
+
+function parseHeaders(raw: string | null): Record<string, string> | null {
+  if (!raw) return null
+  try {
+    const obj = JSON.parse(raw)
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) return obj as Record<string, string>
+  } catch {
+    // fall through
+  }
+  return null
 }
 
 function mapSite(row: SiteRow): Site {
@@ -274,7 +389,53 @@ function mapSite(row: SiteRow): Site {
     expectedStatus: row.expected_status,
     tags: getTagsForSite(row.id),
     logSlug: row.log_slug,
+    httpMethod: row.http_method || 'GET',
+    requestHeaders: parseHeaders(row.request_headers),
+    requestBody: row.request_body,
+    authUser: row.auth_user,
+    hasAuthPass: !!row.auth_pass,
+    timeoutMs: row.timeout_ms ?? 15000,
+    followRedirects: row.follow_redirects === null ? true : !!row.follow_redirects,
+    acceptedStatuses: row.accepted_statuses,
+    contentExpect: row.content_expect,
+    contentForbid: row.content_forbid,
+    contentRegex: row.content_regex,
+    contentMinBytes: row.content_min_bytes,
+    baselineMode: row.baseline_mode === 'adaptive' ? 'adaptive' : 'fixed',
+    contentWatch: !!row.content_watch,
+    contentWatchSensitivity: row.content_watch_sensitivity ?? 30,
+    slaTarget: row.sla_target,
   }
+}
+
+/** Server-only extras never placed on the wire `Site` — currently just the basic-auth password. */
+export interface SiteSecrets {
+  authPass: string | null
+  /** Stored content-watch reference: the per-chunk hash list, or null before the first check. */
+  bodyChunks: string[] | null
+}
+
+export function getSiteSecrets(siteId: number): SiteSecrets {
+  const row = getDb()
+    .prepare('SELECT auth_pass, body_chunks FROM sites WHERE id = ?')
+    .get(siteId) as { auth_pass: string | null; body_chunks: string | null } | undefined
+  let bodyChunks: string[] | null = null
+  if (row?.body_chunks) {
+    try {
+      const parsed = JSON.parse(row.body_chunks)
+      if (Array.isArray(parsed)) bodyChunks = parsed as string[]
+    } catch {
+      // ignore malformed
+    }
+  }
+  return { authPass: row?.auth_pass ?? null, bodyChunks }
+}
+
+/** Persists a fresh content-watch reference after an accepted change (or the first-ever check). */
+export function setSiteBodyChunks(siteId: number, chunks: string[]) {
+  getDb()
+    .prepare(`UPDATE sites SET body_chunks = ?, body_chunks_at = datetime('now') WHERE id = ?`)
+    .run(JSON.stringify(chunks), siteId)
 }
 
 interface CheckDbRow {
@@ -300,6 +461,10 @@ interface CheckDbRow {
   security_headers: string | null
   dns_records: string | null
   response_headers: string | null
+  assertion_failed: number | null
+  assertion_detail: string | null
+  body_hash: string | null
+  degraded_threshold_ms: number | null
 }
 
 function mapCheck(row: CheckDbRow): CheckRow {
@@ -330,6 +495,10 @@ function mapCheck(row: CheckDbRow): CheckRow {
     responseHeaders: row.response_headers
       ? (JSON.parse(row.response_headers) as Record<string, string>)
       : {},
+    assertionFailed: !!row.assertion_failed,
+    assertionDetail: row.assertion_detail,
+    bodyHash: row.body_hash,
+    degradedThresholdMs: row.degraded_threshold_ms,
   }
 }
 
@@ -350,58 +519,82 @@ export function getSiteByUrl(url: string): Site | null {
   return row ? mapSite(row) : null
 }
 
-export function insertSite(input: {
-  url: string
-  name: string | null
-  checkIntervalSeconds: number
-  degradedMs?: number
-  expectedStatus?: number | null
-  logSlug?: string | null
-}): Site {
+// camelCase settings key -> sites column. The single source of truth for which fields
+// insertSite/updateSite persist; parseSiteSettings() in server/utils/siteSettings.ts validates
+// the same set.
+const SITE_SETTINGS_COLUMNS: Record<string, string> = {
+  url: 'url',
+  name: 'name',
+  checkIntervalSeconds: 'check_interval_seconds',
+  degradedMs: 'degraded_ms',
+  expectedStatus: 'expected_status',
+  logSlug: 'log_slug',
+  httpMethod: 'http_method',
+  requestHeaders: 'request_headers',
+  requestBody: 'request_body',
+  authUser: 'auth_user',
+  authPass: 'auth_pass',
+  timeoutMs: 'timeout_ms',
+  followRedirects: 'follow_redirects',
+  acceptedStatuses: 'accepted_statuses',
+  contentExpect: 'content_expect',
+  contentForbid: 'content_forbid',
+  contentRegex: 'content_regex',
+  contentMinBytes: 'content_min_bytes',
+  baselineMode: 'baseline_mode',
+  contentWatch: 'content_watch',
+  contentWatchSensitivity: 'content_watch_sensitivity',
+  slaTarget: 'sla_target',
+}
+
+function toSiteDbValue(key: string, value: unknown): unknown {
+  if (key === 'requestHeaders') return value == null ? null : JSON.stringify(value)
+  if (key === 'followRedirects' || key === 'contentWatch') return value ? 1 : 0
+  return value as string | number | null
+}
+
+export function insertSite(
+  input: { url: string; name: string | null; checkIntervalSeconds: number } & Partial<SiteSettings>,
+): Site {
+  const cols: string[] = []
+  const placeholders: string[] = []
+  const values: unknown[] = []
+  for (const [key, col] of Object.entries(SITE_SETTINGS_COLUMNS)) {
+    const v = (input as Record<string, unknown>)[key]
+    if (v === undefined) continue
+    cols.push(col)
+    placeholders.push('?')
+    values.push(toSiteDbValue(key, v))
+  }
   const result = getDb()
-    .prepare(
-      'INSERT INTO sites (url, name, check_interval_seconds, degraded_ms, expected_status, log_slug) VALUES (?, ?, ?, ?, ?, ?)',
-    )
-    .run(
-      input.url,
-      input.name,
-      input.checkIntervalSeconds,
-      input.degradedMs ?? 5000,
-      input.expectedStatus ?? null,
-      input.logSlug ?? null,
-    )
+    .prepare(`INSERT INTO sites (${cols.join(', ')}) VALUES (${placeholders.join(', ')})`)
+    .run(...(values as (string | number | null)[]))
   return getSite(result.lastInsertRowid as number)!
 }
 
-export function updateSite(
-  id: number,
-  patch: Partial<{
-    url: string
-    name: string | null
-    checkIntervalSeconds: number
-    enabled: boolean
-    degradedMs: number
-    expectedStatus: number | null
-    logSlug: string | null
-  }>,
-): Site | null {
+export function updateSite(id: number, patch: Partial<SiteSettings> & { enabled?: boolean }): Site | null {
   const current = getSite(id)
   if (!current) return null
 
-  getDb()
-    .prepare(
-      `UPDATE sites SET url = ?, name = ?, check_interval_seconds = ?, enabled = ?, degraded_ms = ?, expected_status = ?, log_slug = ? WHERE id = ?`,
-    )
-    .run(
-      patch.url ?? current.url,
-      patch.name === undefined ? current.name : patch.name,
-      patch.checkIntervalSeconds ?? current.checkIntervalSeconds,
-      (patch.enabled ?? current.enabled) ? 1 : 0,
-      patch.degradedMs ?? current.degradedMs,
-      patch.expectedStatus === undefined ? current.expectedStatus : patch.expectedStatus,
-      patch.logSlug === undefined ? current.logSlug : patch.logSlug,
-      id,
-    )
+  const sets: string[] = []
+  const values: unknown[] = []
+  for (const [key, col] of Object.entries(SITE_SETTINGS_COLUMNS)) {
+    if (!(key in patch)) continue
+    const v = (patch as Record<string, unknown>)[key]
+    if (v === undefined) continue
+    sets.push(`${col} = ?`)
+    values.push(toSiteDbValue(key, v))
+  }
+  if (patch.enabled !== undefined) {
+    sets.push('enabled = ?')
+    values.push(patch.enabled ? 1 : 0)
+  }
+  if (sets.length) {
+    values.push(id)
+    getDb()
+      .prepare(`UPDATE sites SET ${sets.join(', ')} WHERE id = ?`)
+      .run(...(values as (string | number | null)[]))
+  }
   return getSite(id)
 }
 
@@ -494,6 +687,10 @@ export interface InsertCheckInput {
   securityHeaders: SecurityHeadersReport | null
   dnsRecords: DnsRecords | null
   responseHeaders: Record<string, string>
+  assertionFailed?: boolean
+  assertionDetail?: string | null
+  bodyHash?: string | null
+  degradedThresholdMs?: number | null
 }
 
 export function insertCheck(input: InsertCheckInput): CheckRow {
@@ -504,8 +701,9 @@ export function insertCheck(input: InsertCheckInput): CheckRow {
         time_dns, time_tcp, time_tls, time_ttfb, time_total,
         ssl_valid, ssl_issuer, ssl_expires_at, ssl_days_remaining,
         page_title, content_length, content_type,
-        redirect_chain, security_headers, dns_records, response_headers
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        redirect_chain, security_headers, dns_records, response_headers,
+        assertion_failed, assertion_detail, body_hash, degraded_threshold_ms
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.siteId,
@@ -528,11 +726,14 @@ export function insertCheck(input: InsertCheckInput): CheckRow {
       input.securityHeaders ? JSON.stringify(input.securityHeaders) : null,
       input.dnsRecords ? JSON.stringify(input.dnsRecords) : null,
       JSON.stringify(input.responseHeaders),
+      input.assertionFailed ? 1 : 0,
+      input.assertionDetail ?? null,
+      input.bodyHash ?? null,
+      input.degradedThresholdMs ?? null,
     )
 
-  getDb()
-    .prepare(`DELETE FROM checks WHERE site_id = ? AND checked_at < datetime('now', '-30 days')`)
-    .run(input.siteId)
+  // Raw-check retention is handled fleet-wide once a day by server/utils/rollup.ts pruneChecks(),
+  // not on every insert — a per-insert range delete over the whole fleet was needless churn.
 
   const row = getDb().prepare('SELECT * FROM checks WHERE id = ?').get(result.lastInsertRowid) as CheckDbRow
   return mapCheck(row)
@@ -666,20 +867,62 @@ export function getCheckLog(siteId: number, filter: CheckLogFilter): CheckRow[] 
   return rows.map(mapCheck)
 }
 
+interface DailyUptimeAgg {
+  day: string
+  total: number
+  up: number
+  down_seconds: number
+  p95_ms: number | null
+}
+
+/**
+ * Per-day uptime for the calendar and the SLA panel. History past ~30 days comes from the
+ * `daily_uptime` rollup table (raw checks are pruned by then); the current day is always computed
+ * live from `checks` so it stays fresh between the midnight rollup ticks.
+ */
 export function getDailyUptime(siteId: number, days = 30): DailyUptime[] {
-  const rows = getDb()
+  const today = new Date().toISOString().slice(0, 10)
+
+  // Rollups are authoritative for any day they cover — they survive the raw-check prune and
+  // carry downSeconds / p95. Raw checks fill in days a rollup hasn't been written for yet
+  // (notably today, and the gap between a check landing and the next midnight tick).
+  const rollups = getDb()
+    .prepare(
+      `SELECT day,
+              total_checks AS total,
+              (up_checks + degraded_checks) AS up,
+              down_seconds,
+              p95_ms
+       FROM daily_uptime
+       WHERE site_id = ? AND day >= date('now', ?)`,
+    )
+    .all(siteId, `-${days} days`) as DailyUptimeAgg[]
+
+  const live = getDb()
     .prepare(
       `SELECT date(checked_at) AS day,
               COUNT(*) AS total,
               SUM(CASE WHEN status != 'down' THEN 1 ELSE 0 END) AS up
        FROM checks
        WHERE site_id = ? AND checked_at >= date('now', ?)
-       GROUP BY day
-       ORDER BY day ASC`,
+       GROUP BY day`,
     )
     .all(siteId, `-${days} days`) as { day: string; total: number; up: number }[]
 
-  const byDay = new Map(rows.map((r) => [r.day, r]))
+  const rollupDays = new Set(rollups.map((r) => r.day))
+  const byDay = new Map<string, DailyUptimeAgg>()
+  for (const r of live) {
+    if (rollupDays.has(r.day)) continue // rollup wins
+    byDay.set(r.day, {
+      day: r.day,
+      total: r.total,
+      up: r.up,
+      down_seconds: r.total > 0 ? downSecondsForDay(siteId, r.day) : 0,
+      p95_ms: null,
+    })
+  }
+  for (const r of rollups) byDay.set(r.day, r)
+
   const result: DailyUptime[] = []
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date()
@@ -690,9 +933,141 @@ export function getDailyUptime(siteId: number, days = 30): DailyUptime[] {
       date: key,
       total: row?.total ?? 0,
       uptime: row && row.total > 0 ? (100 * row.up) / row.total : null,
+      downSeconds: row?.down_seconds ?? 0,
+      p95Ms: row?.p95_ms ?? null,
     })
   }
   return result
+}
+
+/** Trailing median of the last `n` daily p95s — the adaptive response-time baseline (3.3). */
+export function getResponseBaselineMs(siteId: number, n = 7): number | null {
+  const rows = getDb()
+    .prepare(
+      `SELECT p95_ms FROM daily_uptime
+       WHERE site_id = ? AND p95_ms IS NOT NULL
+       ORDER BY day DESC LIMIT ?`,
+    )
+    .all(siteId, n) as { p95_ms: number }[]
+  if (rows.length < 3) return null
+  const sorted = rows.map((r) => r.p95_ms).sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2
+}
+
+// ---------- SLA / error budget ----------
+
+function monthBoundsMs(month: string): { start: number; end: number } {
+  const [y, m] = month.split('-').map(Number)
+  const start = Date.UTC(y!, m! - 1, 1)
+  const end = Date.UTC(m! === 12 ? y! + 1 : y!, m! === 12 ? 0 : m!, 1)
+  return { start, end }
+}
+
+/** MTTR / MTBF over the incidents that started within [fromMs, toMs). */
+export function getIncidentMetrics(
+  siteId: number,
+  fromMs: number,
+  toMs: number,
+): { count: number; mttrSeconds: number | null; mtbfSeconds: number | null } {
+  const rows = getDb()
+    .prepare(
+      `SELECT started_at, ended_at FROM incidents
+       WHERE site_id = ? AND started_at >= ? AND started_at < ?
+       ORDER BY started_at ASC`,
+    )
+    .all(
+      siteId,
+      new Date(fromMs).toISOString().slice(0, 19).replace('T', ' '),
+      new Date(toMs).toISOString().slice(0, 19).replace('T', ' '),
+    ) as { started_at: string; ended_at: string | null }[]
+
+  const toMsOf = (s: string) => new Date(`${s.replace(' ', 'T')}Z`).getTime()
+  const closed = rows.filter((r) => r.ended_at)
+  const mttrSeconds = closed.length
+    ? closed.reduce((sum, r) => sum + (toMsOf(r.ended_at!) - toMsOf(r.started_at)), 0) / closed.length / 1000
+    : null
+
+  let mtbfSeconds: number | null = null
+  if (rows.length >= 2) {
+    const first = toMsOf(rows[0]!.started_at)
+    const last = toMsOf(rows[rows.length - 1]!.started_at)
+    mtbfSeconds = (last - first) / (rows.length - 1) / 1000
+  }
+
+  return { count: rows.length, mttrSeconds, mtbfSeconds }
+}
+
+/**
+ * Monthly SLA / error-budget figures for one site. Downtime is time-weighted from incident
+ * intervals (not rollups), so it is correct even for a month whose rollups haven't run. For the
+ * current month "elapsed" runs to now, so the budget reads sensibly mid-month.
+ */
+export function getSlaReport(siteId: number, month?: string): SlaReport | null {
+  const site = getSite(siteId)
+  if (!site || site.slaTarget === null) return null
+
+  const now = new Date()
+  const targetMonth = month ?? now.toISOString().slice(0, 7)
+  const { start, end } = monthBoundsMs(targetMonth)
+  const elapsedEnd = Math.min(now.getTime(), end)
+  if (elapsedEnd <= start) {
+    // A future month — nothing has elapsed.
+    return {
+      month: targetMonth,
+      target: site.slaTarget,
+      achievedPct: 100,
+      downSeconds: 0,
+      allowedDownSeconds: 0,
+      budgetUsedPct: 0,
+      elapsedSeconds: 0,
+      incidentCount: 0,
+      mttrSeconds: null,
+      mtbfSeconds: null,
+      trailing12: buildTrailing12(siteId, targetMonth),
+    }
+  }
+
+  const elapsedSeconds = (elapsedEnd - start) / 1000
+  const downSeconds = downSecondsInRange(siteId, start, elapsedEnd)
+  const allowedDownSeconds = elapsedSeconds * (1 - site.slaTarget / 100)
+  const achievedPct = 100 * (1 - downSeconds / elapsedSeconds)
+  const budgetUsedPct = allowedDownSeconds > 0 ? (100 * downSeconds) / allowedDownSeconds : downSeconds > 0 ? Infinity : 0
+  const metrics = getIncidentMetrics(siteId, start, elapsedEnd)
+
+  return {
+    month: targetMonth,
+    target: site.slaTarget,
+    achievedPct,
+    downSeconds,
+    allowedDownSeconds,
+    budgetUsedPct: Number.isFinite(budgetUsedPct) ? budgetUsedPct : 100,
+    elapsedSeconds,
+    incidentCount: metrics.count,
+    mttrSeconds: metrics.mttrSeconds,
+    mtbfSeconds: metrics.mtbfSeconds,
+    trailing12: buildTrailing12(siteId, targetMonth),
+  }
+}
+
+function buildTrailing12(siteId: number, endMonth: string): { month: string; uptimePct: number | null }[] {
+  const [ey, em] = endMonth.split('-').map(Number)
+  const out: { month: string; uptimePct: number | null }[] = []
+  const now = Date.now()
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(Date.UTC(ey!, em! - 1 - i, 1))
+    const month = d.toISOString().slice(0, 7)
+    const { start, end } = monthBoundsMs(month)
+    const elapsedEnd = Math.min(now, end)
+    if (elapsedEnd <= start) {
+      out.push({ month, uptimePct: null })
+      continue
+    }
+    const elapsed = (elapsedEnd - start) / 1000
+    const down = downSecondsInRange(siteId, start, elapsedEnd)
+    out.push({ month, uptimePct: 100 * (1 - down / elapsed) })
+  }
+  return out
 }
 
 export function buildSiteSummary(site: Site): SiteSummary {
@@ -718,11 +1093,14 @@ export function buildComparison(siteIds: number[], hours: number): CompareRow[] 
     .map((site) => {
       const responseStats = getResponseStats(site.id, hours)
       const lighthouse = getLatestLighthouseReport(site.id, 'mobile')
+      const sla = getSlaReport(site.id)
       return {
         site: { id: site.id, name: site.name, url: site.url },
         uptime24h: getUptime(site.id, 24),
         uptime7d: getUptime(site.id, 24 * 7),
         uptime30d: getUptime(site.id, 24 * 30),
+        slaAchievedPct: sla?.achievedPct ?? null,
+        slaTarget: sla?.target ?? null,
         avgMs: responseStats.avgMs,
         p95Ms: responseStats.p95Ms,
         phases: getPhaseAverages(site.id, hours),
@@ -1154,6 +1532,14 @@ export function getLatestDnsRecordSet(siteId: number): DnsRecordSet | null {
     .prepare('SELECT * FROM dns_record_sets WHERE site_id = ? ORDER BY checked_at DESC LIMIT 1')
     .get(siteId) as DnsRecordSetDbRow | undefined
   return row ? mapDnsRecordSet(row) : null
+}
+
+/** The most recent `n` DNS snapshots, newest first — used to spot a nameserver change. */
+export function getRecentDnsRecordSets(siteId: number, n: number): DnsRecordSet[] {
+  const rows = getDb()
+    .prepare('SELECT * FROM dns_record_sets WHERE site_id = ? ORDER BY checked_at DESC, id DESC LIMIT ?')
+    .all(siteId, n) as DnsRecordSetDbRow[]
+  return rows.map(mapDnsRecordSet)
 }
 
 export function getDnsHistory(siteId: number, days: number, limit: number): DnsRecordSet[] {

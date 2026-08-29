@@ -8,10 +8,13 @@ const { tags } = useTags()
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: 'dashboard', exact: true },
+  { to: '/triage', label: 'Triage', icon: 'emergency_home', exact: false },
   { to: '/compare', label: 'Compare', icon: 'compare_arrows', exact: false },
   { to: '/logs', label: 'Logs', icon: 'receipt_long', exact: false },
   { to: '/notifications', label: 'Notifications', icon: 'notifications', exact: false },
 ]
+
+const { open: openCommandPalette } = useCommandPalette()
 
 const footnote = computed(() => {
   const siteCount = sites.value?.length ?? 0
@@ -61,6 +64,15 @@ const footnote = computed(() => {
     </nav>
 
     <div class="mt-auto flex flex-col gap-4">
+      <button
+        type="button"
+        class="flex items-center gap-2 rounded-full border border-white/15 px-3 py-2 text-xs text-neutral-300 transition-colors hover:bg-white/10 hover:text-white"
+        @click="openCommandPalette()"
+      >
+        <UiIcon name="search" :size="15" />
+        Quick jump
+        <kbd class="ml-auto rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px]">⌘K</kbd>
+      </button>
       <UiThemeToggle />
       <p class="text-[11px] leading-relaxed text-neutral-500">{{ footnote }}</p>
     </div>

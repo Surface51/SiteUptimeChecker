@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   formatAbsoluteTime,
   formatRelativeTime,
+  notificationToneClass,
   notificationTypeIcon,
   notificationTypeLabel,
+  notificationTypeTone,
 } from '../../app/utils/notificationDisplay'
 import type { NotificationType } from '../../shared/types'
 
@@ -58,17 +60,27 @@ describe('formatAbsoluteTime', () => {
 })
 
 describe('notification type maps', () => {
-  const types: NotificationType[] = ['down', 'up', 'degraded', 'ssl_expiring', 'lighthouse_regression']
+  const types: NotificationType[] = [
+    'down',
+    'up',
+    'degraded',
+    'ssl_expiring',
+    'lighthouse_regression',
+    'domain_expiring',
+    'nameservers_changed',
+    'ssl_issuer_changed',
+    'content_changed',
+    'log_5xx_spike',
+    'log_php_fatal',
+    'log_threat_ip',
+  ]
 
-  it('has an icon for every NotificationType', () => {
+  it('has an icon, label, tone and tone-class for every NotificationType', () => {
     for (const type of types) {
       expect(notificationTypeIcon[type]).toBeTruthy()
-    }
-  })
-
-  it('has a label for every NotificationType', () => {
-    for (const type of types) {
       expect(notificationTypeLabel[type]).toBeTruthy()
+      expect(notificationTypeTone[type]).toBeTruthy()
+      expect(notificationToneClass[type]).toBeTruthy()
     }
   })
 })

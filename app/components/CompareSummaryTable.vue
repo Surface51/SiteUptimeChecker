@@ -62,6 +62,12 @@ const metrics = computed<MetricRow[]>(() => [
   { label: 'Uptime 24h', values: props.rows.map((r) => r.uptime24h), format: formatPct, better: 'max' },
   { label: 'Uptime 7d', values: props.rows.map((r) => r.uptime7d), format: formatPct, better: 'max' },
   { label: 'Uptime 30d', values: props.rows.map((r) => r.uptime30d), format: formatPct, better: 'max' },
+  {
+    label: 'SLA (this month)',
+    values: props.rows.map((r) => r.slaAchievedPct),
+    format: (v: number | null) => (v === null ? '—' : `${v.toFixed(3)}%`),
+    better: 'max',
+  },
   { label: 'Avg response', values: props.rows.map((r) => r.avgMs), format: formatMs, better: 'min' },
   { label: 'p95 response', values: props.rows.map((r) => r.p95Ms), format: formatMs, better: 'min' },
   { label: 'Incidents', values: props.rows.map((r) => r.incidents.count), format: formatCount, better: 'min' },

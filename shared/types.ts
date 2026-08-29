@@ -54,6 +54,8 @@ export interface DnsRecordSet {
   error: string | null
 }
 
+export type BaselineMode = 'fixed' | 'adaptive'
+
 export interface Site {
   id: number
   url: string
@@ -67,6 +69,34 @@ export interface Site {
   tags: string[]
   /** Name of this site's folder under log-ingress/, or null if no logs are shipped for it. */
   logSlug: string | null
+
+  // --- Advanced request options (3.2) ---
+  httpMethod: string
+  requestHeaders: Record<string, string> | null
+  requestBody: string | null
+  authUser: string | null
+  /** True when a stored password exists. The password itself never leaves the server. */
+  hasAuthPass: boolean
+  timeoutMs: number
+  followRedirects: boolean
+  /** Accepted-status expression, e.g. "200", "200,204", "200-299", "2xx,3xx". Null = default heuristic. */
+  acceptedStatuses: string | null
+
+  // --- Content assertions (3.1) ---
+  contentExpect: string | null
+  contentForbid: string | null
+  contentRegex: string | null
+  contentMinBytes: number | null
+
+  // --- Adaptive response-time baseline (3.3) ---
+  baselineMode: BaselineMode
+
+  // --- Content-change watch (3.4) ---
+  contentWatch: boolean
+  contentWatchSensitivity: number
+
+  // --- SLA (5) — percent target, e.g. 99.9. Null hides the SLA panel. ---
+  slaTarget: number | null
 }
 
 export interface CheckRow {
@@ -96,6 +126,15 @@ export interface CheckRow {
   securityHeaders: SecurityHeadersReport | null
   dnsRecords: DnsRecords | null
   responseHeaders: Record<string, string>
+
+  /** A configured content assertion failed on this check — forces status 'down'. */
+  assertionFailed: boolean
+  /** Human description of the failed assertion, e.g. 'missing expected text "Add to cart"'. */
+  assertionDetail: string | null
+  /** Hash of the normalised response body — lets the check log show that content differed. */
+  bodyHash: string | null
+  /** The degraded threshold (ms) actually applied — fixed value, or the adaptive one. */
+  degradedThresholdMs: number | null
 }
 
 export interface StatusTick {
@@ -147,6 +186,10 @@ export interface DailyUptime {
   date: string
   uptime: number | null
   total: number
+  /** Time-weighted downtime for the day, seconds. From incident intervals clipped to the day. */
+  downSeconds: number
+  /** p95 response time for the day, ms — feeds the adaptive baseline and the SLA panel. */
+  p95Ms: number | null
 }
 
 export interface ComparePhaseAverages {
@@ -173,6 +216,9 @@ export interface CompareRow {
   uptime24h: number | null
   uptime7d: number | null
   uptime30d: number | null
+  /** This month's achieved SLA %, or null when the site has no target set. */
+  slaAchievedPct: number | null
+  slaTarget: number | null
   avgMs: number | null
   p95Ms: number | null
   phases: ComparePhaseAverages
@@ -188,6 +234,11 @@ export type NotificationType =
   | 'degraded'
   | 'ssl_expiring'
   | 'lighthouse_regression'
+  // Domain/certificate watch — see server/utils/domainAlerts.ts and server/utils/notifications.ts.
+  | 'domain_expiring'
+  | 'nameservers_changed'
+  | 'ssl_issuer_changed'
+  | 'content_changed'
   // Raised from ingested logs rather than from a check — see server/utils/logs/alerts.ts.
   | 'log_5xx_spike'
   | 'log_php_fatal'
@@ -261,4 +312,48 @@ export interface IngestStatus {
   currentFileBytesTotal: number
   currentFileBytesDone: number
   errors: string[]
+}
+
+/** Monthly SLA / error-budget figures for one site — see server/utils/db.ts getSlaReport. */
+export interface SlaReport {
+  /** Month in YYYY-MM. */
+  month: string
+  /** Percent target, e.g. 99.9. */
+  target: number
+  /** Achieved availability for the month so far, percent, time-weighted. */
+  achievedPct: number
+  /** Total time-weighted downtime this month, seconds. */
+  downSeconds: number
+  /** Downtime the target permits over the elapsed part of the month, seconds. */
+  allowedDownSeconds: number
+  /** 100 * downSeconds / allowedDownSeconds. Over 100 means the budget is blown. */
+  budgetUsedPct: number
+  /** Seconds elapsed in the month so far (to now for the current month, to month-end otherwise). */
+  elapsedSeconds: number
+  incidentCount: number
+  /** Mean time to recovery over closed incidents this month, seconds. */
+  mttrSeconds: number | null
+  /** Mean time between incident starts this month, seconds. */
+  mtbfSeconds: number | null
+  /** Per-month uptime for the trailing 12 months, oldest first. */
+  trailing12: { month: string; uptimePct: number | null }[]
+}
+
+export type TriageSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info'
+
+/** One actionable row on the /triage page — see server/api/triage.get.ts. */
+export interface TriageItem {
+  id: string
+  severity: TriageSeverity
+  siteId: number
+  siteName: string
+  siteUrl: string
+  /** Short category label, e.g. 'Incident', 'Cert expiring', 'Stale', 'Log alerts'. */
+  kind: string
+  /** Human sentence describing the problem. */
+  detail: string
+  /** ISO timestamp the underlying condition started / was last seen, for an age display. */
+  since: string | null
+  /** Where the row links — usually the site page, sometimes a log tab. */
+  to: string
 }
