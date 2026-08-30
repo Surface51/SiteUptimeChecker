@@ -5,15 +5,7 @@ export function useSites() {
     default: () => [],
   })
 
-  let interval: ReturnType<typeof setInterval> | undefined
-
-  onMounted(() => {
-    interval = setInterval(() => refresh(), 30_000)
-  })
-
-  onUnmounted(() => {
-    if (interval) clearInterval(interval)
-  })
+  usePoll(() => refresh())
 
   async function addSite(input: { url: string; name?: string; checkIntervalSeconds?: number }) {
     await $fetch('/api/sites', { method: 'POST', body: input })

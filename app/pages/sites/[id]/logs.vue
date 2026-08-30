@@ -1,23 +1,13 @@
 <script setup lang="ts">
-import type { SiteSummary } from '#shared/types'
-
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
 
-const { data: site } = await useFetch<SiteSummary>(() => `/api/sites/${id.value}`)
+const { site } = useInjectedSite()
 
 const filters = useLogFilters()
 // Shared with the child views through provide/inject so every tab reads one window without
 // each page re-deriving it (and so the range control lives here, above <NuxtPage>).
 provide(LOG_FILTERS_KEY, filters)
-
-const hostname = computed(() => {
-  try {
-    return new URL(site.value!.url).hostname
-  } catch {
-    return site.value?.url ?? ''
-  }
-})
 
 // Held back until the site is known to be linked: the endpoint answers 409 for an unlinked
 // site, and asking anyway would put an error in the console on a page that is working fine.
@@ -59,24 +49,10 @@ function onIngestFinished() {
 </script>
 
 <template>
-  <div v-if="site" class="mx-auto flex w-full max-w-[1400px] flex-col gap-6 p-6">
-    <div class="flex flex-col gap-4">
-      <div class="flex flex-wrap items-center gap-3">
-        <NuxtLink
-          :to="`/sites/${id}`"
-          class="inline-flex items-center gap-1 text-sm text-tertiary no-underline transition-colors hover:text-accent"
-        >
-          <UiIcon name="arrow_back" :size="16" />
-          {{ site.name || hostname }}
-        </NuxtLink>
-      </div>
-
-      <h1 class="font-display text-4xl font-bold tracking-tight text-primary">Logs</h1>
-
-      <p v-if="site.logSlug" class="-mt-2 text-sm text-tertiary">
-        Reading <code class="font-mono">log-ingress/{{ site.logSlug }}</code>
-      </p>
-    </div>
+  <div v-if="site" class="flex flex-col gap-6">
+    <p v-if="site.logSlug" class="text-sm text-tertiary">
+      Reading <code class="font-mono">log-ingress/{{ site.logSlug }}</code>
+    </p>
 
     <UiEmptyState v-if="!site.logSlug" icon="folder_off">
       <p class="text-primary">This site isn't linked to a log folder yet.</p>
@@ -85,14 +61,11 @@ function onIngestFinished() {
         <code class="font-mono">log-ingress/&lt;name&gt;/&lt;env&gt;/&lt;server-ip&gt;/</code>, then
         pick that folder under Edit on the site page.
       </p>
-      <UiButton variant="secondary" size="sm" class="mt-2" @click="navigateTo(`/sites/${id}`)">
-        Go to site settings
-      </UiButton>
     </UiEmptyState>
 
     <template v-else>
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <LogsTabNav :site-id="id" :tabs="tabs" />
+        <UiTabNav :base="`/sites/${id}/logs`" :tabs="tabs" />
 
         <div class="flex flex-wrap items-center gap-2">
           <select
