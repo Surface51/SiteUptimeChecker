@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-30T00:00:00Z",
+  "title": "Design System: Site Uptime Checker",
+  "extensions": {
+    "colorMeta": {
+      "surface-51-red": {
+        "role": "primary",
+        "displayName": "Surface 51 Red",
+        "canonical": "#e4312b",
+        "tonalRamp": ["#4a0e0b", "#7a1610", "#a31e19", "#c92620", "#e4312b", "#f0847c", "#fbd5d1", "#fdecea"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#000000",
+        "tonalRamp": ["#000000", "#121212", "#262626", "#5c5c5c", "#8f8f8f", "#b8b8b8", "#dcdcdc", "#f7f7f7"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#121212", "#262626", "#5c5c5c", "#8f8f8f", "#b8b8b8", "#dcdcdc", "#ededed", "#ffffff"]
+      },
+      "up": {
+        "role": "tertiary",
+        "displayName": "Status Up Green",
+        "canonical": "#2f8f4e",
+        "tonalRamp": ["#0d1f13", "#123f22", "#1c5f34", "#267a44", "#2f8f4e", "#48b06c", "#8fd3a5", "#eaf6ee"]
+      },
+      "degraded": {
+        "role": "tertiary",
+        "displayName": "Status Degraded Amber",
+        "canonical": "#a86a0e",
+        "tonalRamp": ["#241a08", "#3d2e0d", "#5c4512", "#7d5c14", "#a86a0e", "#d98f1f", "#e9c98c", "#fdf0dd"]
+      },
+      "maint": {
+        "role": "tertiary",
+        "displayName": "Status Maintenance Blue",
+        "canonical": "#4a70a8",
+        "tonalRamp": ["#101822", "#1c2c40", "#2c4463", "#3a5a86", "#4a70a8", "#7d9cc4", "#b3c6de", "#e9eff7"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page h1 titles and large stat numbers. Barlow Semi Condensed 700, tracking -0.02em." },
+      "headline": { "displayName": "Headline", "purpose": "SectionHeading — the label above a card or region." },
+      "title": { "displayName": "Title", "purpose": "Card and dialog titles (SiteCard h3)." },
+      "body": { "displayName": "Body", "purpose": "Paragraphs, form values, table cells. Barlow 400." },
+      "label": { "displayName": "Label", "purpose": "Uppercase badge text and filter headers. Barlow 600, tracking 0.08em." }
+    },
+    "shadows": [
+      { "name": "overlay", "value": "0 16px 40px -12px rgba(0, 0, 0, 0.28)", "purpose": "Modal-style floating panels — the command palette, dialogs." },
+      { "name": "menu", "value": "0 8px 24px -6px rgba(0, 0, 0, 0.18)", "purpose": "Smaller detached surfaces — dropdown action menus, popovers, toasts." }
+    ],
+    "motion": [
+      { "name": "ease-snappy", "value": "cubic-bezier(0.22, 0.61, 0.36, 1)", "purpose": "The only easing. State-change feedback on controls and surfaces." },
+      { "name": "duration-fast", "value": "100ms", "purpose": "Default transition length — hover, active, color and border changes." },
+      { "name": "duration-base", "value": "150ms", "purpose": "Slightly longer changes where 100ms feels abrupt." },
+      { "name": "splash-fade", "value": "500ms", "purpose": "AppSplash overlay opacity fade-out on first visit only." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one accent-colored action per screen — 'Check all sites', 'Add', submit.",
+      "html": "<button class=\"ds-btn-primary\">Check all sites</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 14px; padding: 8px 18px; border-radius: 9999px; border: 2px solid var(--accent, #e4312b); background: var(--accent, #e4312b); color: var(--accent-text, #ffffff); cursor: pointer; transition: all 100ms cubic-bezier(0.22,0.61,0.36,1); } .ds-btn-primary:hover { background: var(--accent-hover, #c92620); border-color: var(--accent-hover, #c92620); } .ds-btn-primary:active { transform: scale(0.97); } .ds-btn-primary:focus-visible { outline: 2px solid var(--focus-ring, #e4312b); outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Neutral action — inverts to solid ink on hover.",
+      "html": "<button class=\"ds-btn-secondary\">Add site</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; gap: 8px; font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 14px; padding: 8px 18px; border-radius: 9999px; border: 2px solid var(--border-strong, #000000); background: transparent; color: var(--text-primary, #000000); cursor: pointer; transition: all 100ms cubic-bezier(0.22,0.61,0.36,1); } .ds-btn-secondary:hover { background: var(--surface-inverse, #000000); color: var(--text-inverse, #ffffff); } .ds-btn-secondary:active { transform: scale(0.97); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--focus-ring, #e4312b); outline-offset: 2px; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Tag filter / sort toggle. Pill; fills with accent when active.",
+      "html": "<button class=\"ds-chip\">production</button><button class=\"ds-chip ds-chip--active\">critical</button>",
+      "css": ".ds-chip { font-family: 'Barlow', -apple-system, sans-serif; font-weight: 500; font-size: 14px; padding: 8px 16px; border-radius: 9999px; border: 1px solid var(--border-default, #dcdcdc); background: transparent; color: var(--text-primary, #000000); cursor: pointer; transition: background-color 100ms cubic-bezier(0.22,0.61,0.36,1); } .ds-chip:hover { background: var(--surface-sunken, #f7f7f7); } .ds-chip--active { border-color: var(--accent, #e4312b); background: var(--accent, #e4312b); color: var(--accent-text, #ffffff); } .ds-chip:focus-visible { outline: 2px solid var(--focus-ring, #e4312b); outline-offset: 2px; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "custom",
+      "refersTo": "badge",
+      "description": "Signature state marker — a colored dot plus label, one per site/check state.",
+      "html": "<span class=\"ds-status\"><span class=\"ds-status__dot\"></span>Up</span><span class=\"ds-status ds-status--down\"><span class=\"ds-status__dot\"></span>Down</span>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 6px; font-family: 'Barlow', -apple-system, sans-serif; font-weight: 500; font-size: 14px; color: var(--status-up, #2f8f4e); } .ds-status__dot { width: 8px; height: 8px; border-radius: 9999px; background: currentColor; } .ds-status--down { color: var(--status-down, #e4312b); } .ds-status--degraded { color: var(--status-degraded, #a86a0e); } .ds-status--maint { color: var(--status-maint, #4a70a8); } .ds-status--neutral { color: var(--text-tertiary, #8f8f8f); }"
+    },
+    {
+      "name": "Pill Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Uppercase status/label pill — tint fill, solid-color text, no border.",
+      "html": "<span class=\"ds-badge ds-badge--maint\">Maintenance</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; font-family: 'Barlow', -apple-system, sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 12px; border-radius: 9999px; border: 1px solid transparent; background: var(--surface-sunken, #f7f7f7); color: var(--text-primary, #000000); } .ds-badge--maint { background: var(--status-maint-tint, #e9eff7); color: var(--status-maint, #4a70a8); } .ds-badge--up { background: var(--status-up-tint, #eaf6ee); color: var(--status-up, #2f8f4e); } .ds-badge--down { background: var(--status-down-tint, #fdecea); color: var(--status-down, #e4312b); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Labeled field. Border shifts to strong on focus; error turns it red.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field__label\">Site URL</span><input class=\"ds-field__input\" type=\"text\" placeholder=\"https://example.com\" /></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; font-family: 'Barlow', -apple-system, sans-serif; } .ds-field__label { font-size: 14px; font-weight: 500; color: var(--text-secondary, #5c5c5c); } .ds-field__input { border-radius: 12px; border: 1px solid var(--border-default, #dcdcdc); background: var(--surface-raised, #ffffff); padding: 12px 16px; font-size: 16px; color: var(--text-primary, #000000); outline: none; transition: border-color 100ms cubic-bezier(0.22,0.61,0.36,1); } .ds-field__input::placeholder { color: var(--text-tertiary, #8f8f8f); } .ds-field__input:focus { border-color: var(--border-strong, #000000); }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "nav",
+      "refersTo": "chip",
+      "description": "Pill track holding pills; active segment is a solid inverse pill.",
+      "html": "<div class=\"ds-seg\"><button class=\"ds-seg__opt ds-seg__opt--active\">Cards</button><button class=\"ds-seg__opt\">Table</button></div>",
+      "css": ".ds-seg { display: inline-flex; gap: 4px; padding: 4px; border-radius: 9999px; border: 1px solid var(--border-default, #dcdcdc); } .ds-seg__opt { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 9999px; border: none; background: transparent; font-family: 'Barlow', -apple-system, sans-serif; font-size: 12px; font-weight: 500; color: var(--text-secondary, #5c5c5c); cursor: pointer; transition: background-color 100ms cubic-bezier(0.22,0.61,0.36,1); } .ds-seg__opt:hover { background: var(--surface-sunken, #f7f7f7); color: var(--text-primary, #000000); } .ds-seg__opt--active { background: var(--surface-inverse, #000000); color: var(--text-inverse, #ffffff); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat content container — 20px radius, 1px hairline, no shadow. Border promotes to strong on hover when it is a link.",
+      "html": "<div class=\"ds-card\">Panel content</div>",
+      "css": ".ds-card { border-radius: 20px; background: var(--surface-raised, #ffffff); border: 1px solid var(--border-default, #dcdcdc); padding: 24px; transition: border-color 100ms cubic-bezier(0.22,0.61,0.36,1); } .ds-card--link:hover { border-color: var(--border-strong, #000000); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Pit Wall",
+    "overview": "This is a monitoring dashboard built like a motorsport timing screen: monochrome at rest, dense with numbers, and readable at a glance while something is going wrong. The surface is pure black-and-white with a graphite mid-scale; the only chromatic voice is a single warm Surface 51 Red (#e4312b), spent carefully on the one primary action, the active nav item, the focus ring, the S51 mark, and genuine down/error state. Everything else earns its place through typography, hairline rule, and tonal surface steps. The typographic pairing is industrial and sturdy: Barlow Semi Condensed for every heading and numeric readout over plain Barlow for body copy. Nothing is decorative. Corners are either a full pill (every interactive control) or a calm container radius (8/12/20px). Motion is 100ms feedback on ease-snappy, never an entrance. Depth is almost flat: cards sit on the page with a 1px hairline border and no shadow, signaling interactivity by promoting that border to solid black on hover. The exception is transient floating layers (command palette, menus, toasts), which carry a single soft shadow. The persistent chrome is pure #000 in both themes by deliberate design.",
+    "keyCharacteristics": [
+      "Monochrome base, one signal-red accent used sparingly (~one prominent moment per screen)",
+      "Barlow Semi Condensed for all headings + numbers; Barlow for body",
+      "Full-pill interactive controls; 8/12/20px radius for containers",
+      "Flat by default — hairline borders and tonal surfaces, shadow only on floating layers",
+      "Snappy 100ms ease-snappy transitions as feedback, not decoration",
+      "Always-black sidebar/top bar in both light and dark themes",
+      "Five semantic status families (up / degraded / down / maintenance / neutral), each with a -tint pair"
+    ],
+    "rules": [
+      { "name": "The One Voice Rule", "body": "Surface 51 Red appears on ~10% of a screen at most — one primary action, the active nav item, a focus ring, and any true down state. It is never a background wash, a large fill, a decorative divider, or a brand skin. Its rarity is what makes it mean 'look here.'", "section": "colors" },
+      { "name": "The Constant Hue Rule", "body": "Dark mode overrides the semantic layer only. The red-* and gray-* primitive scales and the accent hue are identical in both themes; only surface, border, and text roles are remapped.", "section": "colors" },
+      { "name": "The Black Chrome Rule", "body": "The sidebar and mobile top bar are #000 in both themes and are styled with literal colors (bg-black, text-white, border-white/15), never the flipping surface tokens.", "section": "colors" },
+      { "name": "The Readout Rule", "body": "Anything numeric that a user scans under pressure — uptime %, response ms, counts, Lighthouse scores — is set in Barlow Semi Condensed, not the body face. Numbers are display type here.", "section": "typography" },
+      { "name": "The Two Tracking Rule", "body": "Headings and readouts use tight tracking (-0.02em); uppercase labels use wide tracking (0.08em). Body text stays at normal. There is no other letter-spacing.", "section": "typography" },
+      { "name": "The Flat-Bed Rule", "body": "If it is part of the page, it is flat with a border. If it floats above the page (overlay, menu, toast), it gets exactly one shadow from the vocabulary — never both a heavy border and a shadow.", "section": "elevation" },
+      { "name": "The Border Promotion Rule", "body": "Hover and active states on surfaces are expressed by moving the border from hairline to border-strong, or by swapping fill to the inverse surface — not by shadow, translate, or scale. Buttons may active:scale-[0.97] as touch feedback only.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do build every interactive control as a full pill (9999px) — buttons, chips, badges, segmented controls, tab nav, nav items, count dots.",
+      "Do use the 8 / 12 / 20px container radius for anything that holds content, and nothing between pill and those steps.",
+      "Do convey depth with a 1px hairline border and tonal surface steps (page -> raised -> sunken); promote the border to border-strong on hover instead of adding a shadow.",
+      "Do reserve shadow for transient floating layers (command palette, menus, toasts) using the Overlay / Menu vocabulary — one shadow, no heavy border.",
+      "Do show every up / degraded / down / paused / maintenance state with the StatusBadge dot + label pattern and the five semantic status colors.",
+      "Do set headings and any scanned number in Barlow Semi Condensed with -0.02em tracking; set uppercase labels in Barlow with 0.08em tracking.",
+      "Do keep transitions at ~100ms on ease-snappy (cubic-bezier(0.22, 0.61, 0.36, 1)) — motion is feedback, not an entrance.",
+      "Do keep the sidebar and top bar #000 in both themes, styled with literal colors, not the flipping surface tokens.",
+      "Do limit Surface 51 Red to ~one prominent moment per screen (primary action, active nav, focus ring, S51 mark) plus genuine down/error state."
+    ],
+    "donts": [
+      "Don't use the red as a large fill, background wash, gradient, or decorative divider — it is a signal, not a brand skin.",
+      "Don't put a drop shadow on a resting surface (card, panel, summary bar, input).",
+      "Don't introduce a second display typeface, a serif, or any letter-spacing outside the tight/normal/wide trio.",
+      "Don't invent a status color outside the five families (up / degraded / down / maint / neutral) and their -tint pairs.",
+      "Don't let dark mode alter the raw red-* / gray-* scales or the accent hue — only the semantic surface/border/text roles remap.",
+      "Don't exceed the 1160px content column or drop the 236px rail at desktop.",
+      "Don't signal hover/active with translate, scale, or shadow on surfaces — use border promotion or an inverse-fill swap (buttons' active:scale-[0.97] touch feedback is the only exception)."
+    ]
+  }
+}
