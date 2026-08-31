@@ -40,7 +40,35 @@ const DEFAULT_MAX_REDIRECTS = 10
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
 const MAX_BODY_BYTES = 5 * 1024 * 1024
 const DEFAULT_SCAN_BYTES = 65_536
-const USER_AGENT = 'SiteUptimeChecker/1.0 (+local health monitor)'
+
+const MONITOR_NAME = 'SiteUptimeChecker'
+
+/**
+ * Identifying metadata for the outbound probes, so the traffic is easy to recognise as
+ * synthetic uptime monitoring and to allow-list on the target side. All optional:
+ *   UPTIME_USER_AGENT      — replace the whole User-Agent string
+ *   UPTIME_MONITOR_URL     — info/status page, folded into the default User-Agent as "+<url>"
+ *   UPTIME_MONITOR_CONTACT — operator email, sent as the RFC 7231 `From` header
+ */
+const MONITOR_INFO_URL = process.env.UPTIME_MONITOR_URL?.trim() || ''
+const MONITOR_CONTACT = process.env.UPTIME_MONITOR_CONTACT?.trim() || ''
+
+const USER_AGENT =
+  process.env.UPTIME_USER_AGENT?.trim() ||
+  `${MONITOR_NAME}/1.0 (uptime monitor${MONITOR_INFO_URL ? `; +${MONITOR_INFO_URL}` : ''})`
+
+/**
+ * Headers sent on every probe (and every redirect hop), unless a per-site custom header
+ * overrides the same key. `X-Uptime-Monitor` is a stable token to match on when allow-listing,
+ * so a firewall rule never has to parse the User-Agent.
+ */
+const MONITOR_HEADERS: Record<string, string> = {
+  'User-Agent': USER_AGENT,
+  'Accept-Encoding': 'identity',
+  Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+  'X-Uptime-Monitor': MONITOR_NAME,
+  ...(MONITOR_CONTACT ? { From: MONITOR_CONTACT } : {}),
+}
 
 function describeError(err: any): string {
   if (err?.message) return err.message
@@ -199,11 +227,7 @@ export async function httpCheck(startUrl: URL, options: HttpCheckOptions = {}): 
   const maxRedirects = followRedirects ? options.maxRedirects ?? DEFAULT_MAX_REDIRECTS : 0
   const scanBytes = Math.max(0, options.bodyScanBytes ?? DEFAULT_SCAN_BYTES)
 
-  const headers: Record<string, string> = {
-    'User-Agent': USER_AGENT,
-    'Accept-Encoding': 'identity',
-    Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
-  }
+  const headers: Record<string, string> = { ...MONITOR_HEADERS }
   for (const [k, v] of Object.entries(options.headers ?? {})) headers[k] = v
   if (options.authUser) {
     const token = Buffer.from(`${options.authUser}:${options.authPass ?? ''}`).toString('base64')

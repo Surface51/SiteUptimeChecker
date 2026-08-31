@@ -32,6 +32,16 @@ sections) can carry:
 > back to the browser (`hasAuthPass: true/false` is all the API exposes) and is only read
 > server-side when a check runs. Clear it from the Edit form's "Clear stored password" box.
 
+### Identifying the probes (allow-listing)
+
+Every check / response-time request is sent with a descriptive `User-Agent`
+(`SiteUptimeChecker/1.0 (uptime monitor)`) and an `X-Uptime-Monitor: SiteUptimeChecker` header,
+so the traffic reads as synthetic monitoring rather than a real visitor or a scraper. Point a
+firewall / WAF allow-list at the `X-Uptime-Monitor` header (stable, no UA parsing needed) or at
+the User-Agent. Set `UPTIME_MONITOR_URL` to add a `+<url>` info link to the User-Agent,
+`UPTIME_MONITOR_CONTACT` to send a `From:` operator email, or `UPTIME_USER_AGENT` to replace the
+User-Agent string outright. Per-site custom request headers still override any of these.
+
 ### Daily rollups & retention
 
 Raw `checks` rows are pruned after ~30 days by a once-a-day job (previously a delete on every
@@ -189,6 +199,9 @@ invalid.
 | `UPTIME_LOG_INGRESS_DIR` | `./log-ingress` | Where log folders are looked for |
 | `UPTIME_LOG_RETENTION_DAYS` | `90` | Log rows older than this are pruned daily |
 | `UPTIME_LOG_WATCH` | unset | Set to `1` to also ingest on file changes (chokidar) |
+| `UPTIME_USER_AGENT` | `SiteUptimeChecker/1.0 (uptime monitor)` | Replaces the whole `User-Agent` string sent on every check/response-time probe |
+| `UPTIME_MONITOR_URL` | unset | Info/status page URL, folded into the default `User-Agent` as `+<url>` |
+| `UPTIME_MONITOR_CONTACT` | unset | Operator email, sent as the RFC 7231 `From` header on every probe |
 | `DUCKDB_MEMORY_LIMIT` | `1GB` | Memory ceiling for log queries — **the server only**, not `logs:ingest` |
 | `DUCKDB_THREADS` | `2` | Threads DuckDB may use — server only |
 | `UPTIME_URL` | `http://localhost:3000` | Server base URL the `logs:ingest` CLI hands off to |

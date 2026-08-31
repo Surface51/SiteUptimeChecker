@@ -69,6 +69,20 @@ describe('httpCheck request options', () => {
     expect(last.headers['content-length']).toBe('10')
   })
 
+  it('identifies itself as an uptime monitor by default, and lets a per-site header override', async () => {
+    seen.length = 0
+    await httpCheck(new URL(`${base}/`))
+    const def = seen.at(-1)!
+    expect(def.headers['user-agent']).toBe('SiteUptimeChecker/1.0 (uptime monitor)')
+    expect(def.headers['x-uptime-monitor']).toBe('SiteUptimeChecker')
+
+    seen.length = 0
+    await httpCheck(new URL(`${base}/`), { headers: { 'User-Agent': 'custom-agent/9' } })
+    const overridden = seen.at(-1)!
+    expect(overridden.headers['user-agent']).toBe('custom-agent/9')
+    expect(overridden.headers['x-uptime-monitor']).toBe('SiteUptimeChecker')
+  })
+
   it('applies basic auth from authUser/authPass', async () => {
     const ok = await httpCheck(new URL(`${base}/auth`), { authUser: 'u', authPass: 'p' })
     expect(ok.httpStatus).toBe(200)
