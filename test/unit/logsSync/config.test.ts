@@ -31,7 +31,7 @@ describe('loadConfig', () => {
     expect(cfg.pantheon!.alias).toEqual({ 'charles-ives-society': 'charles-ives' })
   })
 
-  it('validates a server source and fills serverDir/port defaults', () => {
+  it('validates a server source and defaults serverDir to the host', () => {
     const cfg = loadConfig(write({
       servers: {
         marchingillini: {
@@ -42,9 +42,33 @@ describe('loadConfig', () => {
       },
     }))
     const src = cfg.servers.marchingillini!.sources[0]!
-    expect(src.port).toBe(22)
+    expect(src.port).toBeUndefined()
     expect(src.serverDir).toBe('203.0.113.10')
     expect(cfg.servers.marchingillini!.env).toBe('live')
+  })
+
+  it('accepts an ~/.ssh/config alias as the host with no user or port', () => {
+    const cfg = loadConfig(write({
+      servers: {
+        mi: {
+          sources: [{ host: 'marchingillini-web1', paths: [
+            { remote: '/var/log/apache2/access.log', as: 'apache-access.log' },
+          ] }],
+        },
+      },
+    }))
+    const src = cfg.servers.mi!.sources[0]!
+    expect(src).toMatchObject({ host: 'marchingillini-web1', serverDir: 'marchingillini-web1' })
+    expect(src.user).toBeUndefined()
+    expect(src.port).toBeUndefined()
+  })
+
+  it('still rejects an empty user when one is given', () => {
+    expect(() => loadConfig(write({
+      servers: { x: { sources: [{ host: 'alias', user: '', paths: [
+        { remote: '/a', as: 'apache-error.log' },
+      ] }] } },
+    }))).toThrow(/user must be a non-empty string/)
   })
 
   it('rejects an `as` that is not a recognised log filename', () => {

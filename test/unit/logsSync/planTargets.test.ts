@@ -75,6 +75,24 @@ describe('buildServerJobs', () => {
     expect(jobs[0]!.ssh).toMatchObject({ host: '203.0.113.10', user: 'root', port: 22, verifyHostKey: true })
   })
 
+  it('carries an ~/.ssh/config alias through with no user or port', () => {
+    const jobs = buildServerJobs(
+      {
+        mi: {
+          env: 'live',
+          sources: [{
+            host: 'marchingillini-web1', serverDir: 'web1',
+            paths: [{ remote: '/var/log/apache2/access.log', as: 'apache-access.log' }],
+          }],
+        },
+      },
+      '/ingress',
+      [],
+    )
+    expect(jobs[0]!.ssh).toEqual({ host: 'marchingillini-web1', verifyHostKey: true })
+    expect(jobs[0]!.destDir).toBe('/ingress/mi/live/web1')
+  })
+
   it('applies the --site filter by folder name', () => {
     const servers = {
       a: { env: 'live', sources: [{ host: 'h1', user: 'u', port: 22, serverDir: 'h1', paths: [{ remote: '/a', as: 'apache-error.log' }] }] },

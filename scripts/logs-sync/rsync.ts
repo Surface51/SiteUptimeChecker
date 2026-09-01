@@ -37,7 +37,7 @@ function expandTilde(p: string): string {
 /** The `-e` value for rsync. rsync word-splits this on spaces, so no path with spaces. */
 export function sshCommand(ssh: SshTarget): string {
   const parts = ['ssh']
-  if (ssh.port !== 22) parts.push('-p', String(ssh.port))
+  if (ssh.port && ssh.port !== 22) parts.push('-p', String(ssh.port))
   if (ssh.identityFile) parts.push('-i', expandTilde(ssh.identityFile))
   parts.push('-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15')
   if (ssh.verifyHostKey) {
@@ -83,8 +83,11 @@ function pullRoot(job: SyncJob): string {
   return `${dirname(job.remote)}/`
 }
 
-function target(job: SyncJob, path: string): string {
-  return `${job.ssh.user}@${job.ssh.host}:${path}`
+/** The `[user@]host:path` argument for rsync. A bare host (no `user`) lets ssh / an
+ *  `~/.ssh/config` alias supply the login name. */
+export function target(job: SyncJob, path: string): string {
+  const prefix = job.ssh.user ? `${job.ssh.user}@` : ''
+  return `${prefix}${job.ssh.host}:${path}`
 }
 
 export async function listRemote(job: SyncJob): Promise<RemoteEntry[]> {

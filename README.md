@@ -174,7 +174,10 @@ by one config file — copy `log-sync.config.example.json` to `log-sync.config.j
   host with explicit `paths`, every entry a `{ remote, as }` pair where `remote` is a file or a
   glob and `as` is the canonical local name (validated against the recognised filenames at load).
   A glob's matches are renamed `<as>-<YYYYMMDD>[.gz]`, the date taken from the remote name or its
-  mtime; two matches wanting the same local name is an error, never a silent overwrite.
+  mtime; two matches wanting the same local name is an error, never a silent overwrite. `host`
+  may be a `Host` alias from your `~/.ssh/config` — then `user`, `port` and `identityFile` can
+  all be omitted and ssh resolves them (set them anyway to override). `serverDir` (the folder
+  name under `log-ingress/<folder>/<env>/`) defaults to `host`.
 
 ```bash
 npm run logs:sync -- --dry-run                       # list every file that would transfer

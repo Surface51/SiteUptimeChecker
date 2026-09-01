@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { SyncJob } from '../../../scripts/logs-sync/planTargets'
-import { parseRsyncList, planJob, sshCommand } from '../../../scripts/logs-sync/rsync'
+import { parseRsyncList, planJob, sshCommand, target } from '../../../scripts/logs-sync/rsync'
 
 const LIST = `drwxr-x---          4,096 2026/08/10 17:36:11 .
 -rw-r--r--            350 2026/08/18 22:24:07 error.log
@@ -34,6 +34,14 @@ describe('sshCommand', () => {
     expect(cmd).toContain('StrictHostKeyChecking=accept-new')
     expect(cmd).toContain('-i /k/id')
     expect(cmd).not.toContain('-p 22')
+  })
+
+  it('passes no -p or -i for a bare ~/.ssh/config alias', () => {
+    const cmd = sshCommand({ host: 'marchingillini-web1', verifyHostKey: true })
+    expect(cmd).not.toContain('-p')
+    expect(cmd).not.toContain('-i')
+    expect(cmd).toContain('BatchMode=yes')
+    expect(cmd).toContain('StrictHostKeyChecking=accept-new')
   })
 })
 
@@ -82,5 +90,17 @@ describe('planJob', () => {
     const plan = planJob(globJob, entries, { now, localSize: () => null })
     expect(plan.transfers).toHaveLength(0)
     expect([...plan.collisions.keys()]).toEqual(['apache-access.log-20260801.gz'])
+  })
+})
+
+describe('target', () => {
+  it('prefixes user@ when a login name is set', () => {
+    expect(target({ ...dirJob, ssh: { host: 'box', user: 'root', port: 22, verifyHostKey: true } }, '/var/log/x'))
+      .toBe('root@box:/var/log/x')
+  })
+
+  it('omits user@ for a bare ~/.ssh/config alias so ssh resolves the login name', () => {
+    expect(target({ ...dirJob, ssh: { host: 'marchingillini-web1', verifyHostKey: true } }, '/var/log/x'))
+      .toBe('marchingillini-web1:/var/log/x')
   })
 })

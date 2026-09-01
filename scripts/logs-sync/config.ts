@@ -27,9 +27,13 @@ export interface ServerPath {
 }
 
 export interface ServerSource {
+  /** A hostname/IP, or a `Host` alias from `~/.ssh/config`. With an alias, `user`, `port` and
+   *  `identityFile` may all be omitted — ssh resolves them (and `HostName`) from your config;
+   *  any you do set here still override it. */
   host: string
-  user: string
-  port: number
+  user?: string
+  /** Omitted → ssh's own default (22) or the alias's `Port`. Only ever passed as `-p` when set. */
+  port?: number
   identityFile?: string
   /** The <server> directory name under log-ingress/<folder>/<env>/. Defaults to `host`. */
   serverDir: string
@@ -92,8 +96,12 @@ function validatePathEntry(p: unknown, where: string): ServerPath {
 function validateSource(s: unknown, where: string): ServerSource {
   if (!s || typeof s !== 'object') throw new ConfigError(`${where} must be an object`)
   const src = s as Record<string, unknown>
-  if (typeof src.host !== 'string' || !src.host) throw new ConfigError(`${where}.host is required`)
-  if (typeof src.user !== 'string' || !src.user) throw new ConfigError(`${where}.user is required`)
+  if (typeof src.host !== 'string' || !src.host) {
+    throw new ConfigError(`${where}.host is required (a hostname/IP or an ~/.ssh/config alias)`)
+  }
+  if (src.user !== undefined && (typeof src.user !== 'string' || !src.user)) {
+    throw new ConfigError(`${where}.user must be a non-empty string`)
+  }
   if (src.port !== undefined && (typeof src.port !== 'number' || !Number.isInteger(src.port))) {
     throw new ConfigError(`${where}.port must be an integer`)
   }
@@ -108,8 +116,8 @@ function validateSource(s: unknown, where: string): ServerSource {
   }
   return {
     host: src.host,
-    user: src.user,
-    port: (src.port as number) ?? 22,
+    user: src.user as string | undefined,
+    port: src.port as number | undefined,
     identityFile: src.identityFile as string | undefined,
     serverDir: (src.serverDir as string) || src.host,
     paths: src.paths.map((p, i) => validatePathEntry(p, `${where}.paths[${i}]`)),

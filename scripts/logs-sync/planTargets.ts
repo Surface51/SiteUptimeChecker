@@ -5,9 +5,12 @@ import { appserverIps, dbserverIps, pantheonSshUser } from './pantheon'
 import { isGlob } from './rotateName'
 
 export interface SshTarget {
+  /** Hostname/IP or an ~/.ssh/config `Host` alias. */
   host: string
-  user: string
-  port: number
+  /** Omitted → no `user@` in the rsync target; ssh/the alias supplies the login name. */
+  user?: string
+  /** Omitted → no `-p`; ssh's default (22) or the alias's `Port` applies. */
+  port?: number
   identityFile?: string
   /** false → StrictHostKeyChecking=no + UserKnownHostsFile=/dev/null (ephemeral Pantheon IPs);
    *  true  → StrictHostKeyChecking=accept-new against the real known_hosts (custom servers). */
@@ -129,6 +132,7 @@ export function buildServerJobs(
         host: src.host, user: src.user, port: src.port,
         identityFile: src.identityFile, verifyHostKey: true,
       }
+      // src.user / src.port are optional: an ~/.ssh/config alias fills them in.
       for (const p of src.paths) {
         const kind: SyncJob['kind'] = isGlob(p.remote) ? 'glob' : 'file'
         jobs.push({
