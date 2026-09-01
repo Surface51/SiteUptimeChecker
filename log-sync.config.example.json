@@ -2,7 +2,9 @@
   "pantheon": {
     "enabled": true,
     "env": "live",
-    "excludePlans": ["Sandbox"],
+    "excludePlans": [
+      "Sandbox"
+    ],
     "include": [],
     "exclude": [],
     "alias": {
@@ -21,10 +23,52 @@
           "identityFile": "~/.ssh/id_ed25519",
           "serverDir": "203.0.113.10",
           "paths": [
-            { "remote": "/etc/apache2/logs/domlogs/mi/marchingillini.com", "as": "apache-access.log" },
-            { "remote": "/etc/apache2/logs/domlogs/mi/marchingillini.com-ssl_log", "as": "apache-access__ssl.log" },
-            { "remote": "/home/mi/logs/marchingillini.com-*.gz", "as": "apache-access.log", "rotated": true },
-            { "remote": "/usr/local/apache/logs/error_log", "as": "apache-error.log" }
+            {
+              "remote": "/etc/apache2/logs/domlogs/mi/marchingillini.com",
+              "as": "apache-access.log"
+            },
+            {
+              "remote": "/etc/apache2/logs/domlogs/mi/marchingillini.com-ssl_log",
+              "as": "apache-access__ssl.log"
+            },
+            {
+              "remote": "/home/mi/logs/marchingillini.com-*.gz",
+              "as": "apache-access.log",
+              "rotated": true
+            },
+            {
+              "remote": "/usr/local/apache/logs/error_log",
+              "as": "apache-error.log"
+            }
+          ]
+        }
+      ]
+    },
+    "charles-ives": {
+      "env": "live",
+      "sources": [
+        {
+          "host": "charles-ives-web1",
+          "serverDir": "web1",
+          "paths": [
+            {
+              "remote": "/var/log/apache2/charlesives.org-access.log",
+              "as": "apache-access.log"
+            },
+            {
+              "remote": "/var/log/apache2/charlesives.org-access.log-*.gz",
+              "as": "apache-access.log",
+              "rotated": true
+            },
+            {
+              "remote": "/var/log/apache2/charlesives.org-error.log",
+              "as": "apache-error.log"
+            },
+            {
+              "remote": "/var/log/apache2/charlesives.org-error.log-*.gz",
+              "as": "apache-error.log",
+              "rotated": true
+            }
           ]
         }
       ]
