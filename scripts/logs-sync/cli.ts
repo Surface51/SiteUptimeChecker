@@ -8,7 +8,7 @@ import { listPantheonSites, terminusBin } from './pantheon'
 import { buildPantheonJobs, buildServerJobs, selectPantheonSites, type SyncJob } from './planTargets'
 import { mapPool } from './pool'
 import { Progress } from './progress'
-import { listRemote, localSizeOf, planJob, pullJob } from './rsync'
+import { listRemote, localSizeOf, planJob, pullJob, shortError } from './rsync'
 
 function fmtBytes(n: number): string {
   const u = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -94,7 +94,7 @@ async function main(): Promise<number> {
           : `nothing new${plan.skipped ? ` (${plan.skipped} skipped)` : ''}`
         console.log(`  ${job.key}\n      ${detail}`)
       } catch (err: any) {
-        console.error(`✗ ${job.key}: ${err.message.split('\n')[0]}`)
+        console.error(`✗ ${job.key}: ${shortError(err)}`)
         failed++
       }
     }
@@ -134,7 +134,7 @@ async function main(): Promise<number> {
   results.forEach((r, i) => {
     if (r.status === 'rejected') {
       failed++
-      progress.fail(jobs[i]!.key, String((r.reason as any)?.message ?? r.reason).split('\n')[0])
+      progress.fail(jobs[i]!.key, shortError(r.reason))
     }
   })
   progress.finish()

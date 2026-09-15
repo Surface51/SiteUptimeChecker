@@ -14,6 +14,7 @@ export class Progress {
   private files = 0
   private bytes = 0
   private started = Date.now()
+  private failures: { key: string; message: string }[] = []
 
   constructor(opts: { tty: boolean; total: number }) {
     this.tty = opts.tty
@@ -39,6 +40,7 @@ export class Progress {
   fail(key: string, message: string) {
     this.done++
     this.failed++
+    this.failures.push({ key, message })
     if (!this.tty) console.error(`✗ ${key} — ${message}`)
     else this.paint(key)
   }
@@ -59,5 +61,10 @@ export class Progress {
       `\n${this.failed ? '⚠ ' : ''}${this.done - this.failed}/${this.total} jobs ok` +
         `${this.failed ? `, ${this.failed} failed` : ''} — ${this.files} files, ${fmtBytes(this.bytes)} in ${secs}s`,
     )
+    // In TTY mode `fail()` only repaints the counter — this is the first and only place
+    // those messages get printed, so print them even though `--no-progress` already did.
+    if (this.tty) {
+      for (const { key, message } of this.failures) console.error(`✗ ${key} — ${message}`)
+    }
   }
 }

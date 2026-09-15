@@ -56,6 +56,7 @@ ports, no public IP, ~$1/mo running cost.
 | **Client server‑logs will live on a machine under a desk.** | Full‑disk encryption (LUKS) on. Off‑box encrypted backups (Part 7). Screen lock. The `data` dir `chmod 750` owned by the service user. |
 | **Someone reboots it for OS updates / it suspends overnight.** | Services are `enabled` → auto‑start on boot. Sleep/suspend masked (Part 3). Verify with a real reboot test (Part 8). |
 | **The app has no login.** Access is the *only* thing between the internet and plaintext basic‑auth secrets in SQLite. | App binds `127.0.0.1` only. Whole hostname behind an Access policy. `ufw` default‑deny inbound as backstop. No second tunnel hostname without its own policy. |
+| **`logs:sync` runs as your personal account (`jack`)**, using your own SSH keys and terminus session, not a service identity. | Simplest path today, but it ties the hourly sync to you personally — if your keys rotate, your terminus session expires, or you leave S51, sync fails quietly. Watch `journalctl -u siteuptime-sync`; revisit a dedicated automation identity if this becomes long‑lived infra. |
 
 ---
 
@@ -90,6 +91,30 @@ sudo chmod 750 /srv/siteuptime/data
 
 If your "ample disk space" is a separate drive, mount it at `/srv/siteuptime` (add to
 `/etc/fstab`) before creating the subdirs.
+
+### 3.2.1 Let `jack` write into log-ingress (logs:sync runs as you)
+
+`logs:sync` runs as **`jack`**, not `uptime` (Part 4.2) — that's the point: it picks up
+your own SSH keys and terminus session instead of a service account's. It still needs to
+land files in the directory `logs:ingest`/the server read from:
+
+```bash
+sudo usermod -aG uptime jack                    # supplementary group, for directory access
+sudo chmod 2775 /srv/siteuptime/log-ingress      # group-writable + setgid
+
+# Create the file WITH its real content before chown — an empty placeholder here
+# means siteuptime-sync.service fails every run with "Unexpected end of JSON input".
+cp /opt/siteuptime/log-sync.config.json /srv/siteuptime/log-sync.config.json
+sudo chown jack:uptime /srv/siteuptime/log-sync.config.json
+sudo chmod 640 /srv/siteuptime/log-sync.config.json
+```
+
+The setgid bit (`2`) means files `jack` writes during sync and files `uptime` writes
+during ingest both end up owned by group `uptime`, so neither user ever hits "permission
+denied" reading the other's output. `/srv/siteuptime/data` stays `750 uptime:uptime`
+untouched — `logs:sync` never writes there.
+
+Log out/in once after the `usermod` for the new group membership to take effect.
 
 ### 3.3 Stop the machine from sleeping
 
@@ -179,10 +204,18 @@ Restart=always
 RestartSec=3
 
 # --- Keep background work from ever freezing the desktop ---
-CPUQuota=1600%          # at most 16 of 32 cores' worth
-CPUWeight=30            # yields to interactive apps under contention
-MemoryHigh=24G          # soft throttle
-MemoryMax=40G           # hard ceiling (OOM-kill the service, not your session)
+# systemd does NOT support inline "value # comment" — the parser takes the rest
+# of the line as the value and silently drops the whole directive. Keep comments
+# on their own line, above the value, or these caps do nothing (verify with
+# `systemctl show siteuptime.service -p CPUQuota,CPUWeight,MemoryHigh,MemoryMax`).
+CPUQuota=1600%
+# ^ at most 16 of 32 cores' worth
+CPUWeight=30
+# ^ yields to interactive apps under contention
+MemoryHigh=24G
+# ^ soft throttle
+MemoryMax=40G
+# ^ hard ceiling (OOM-kill the service, not your session)
 IOWeight=40
 Nice=10
 
@@ -198,6 +231,10 @@ WantedBy=multi-user.target
 
 ### 4.2 Log sync — timer + oneshot
 
+Runs as **`jack`**, not `uptime` — `rsync`/`ssh`/`terminus` need your own credentials and
+`~/.ssh/config` host aliases, not a service account's. See 3.2.1 for the directory
+permissions this requires.
+
 `/etc/systemd/system/siteuptime-sync.service`:
 
 ```ini
@@ -207,8 +244,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-User=uptime
-Group=uptime
+User=jack
 WorkingDirectory=/opt/siteuptime
 EnvironmentFile=/etc/siteuptime.env
 ExecStart=/usr/bin/npm run logs:sync
@@ -249,11 +285,11 @@ curl -sS http://127.0.0.1:3000/ | head -c 200      # sanity: HTML comes back
 
 1. Create / use a Cloudflare account for Surface 51 (Free plan covers everything here).
 2. **Register a domain** via **Cloudflare Registrar** (at‑cost, ~$10/yr for `.com`) —
-   e.g. `s51ops.com`. Or register anywhere and point the nameservers at Cloudflare.
+   e.g. `s51status.com`. Or register anywhere and point the nameservers at Cloudflare.
    *Alternative:* if `surface51.com` is available to you, delegate just
    `uptime.surface51.com` to Cloudflare instead of a new domain — ask whoever runs that
    DNS. Either way you end up with a zone in this Cloudflare account.
-3. Pick the hostname now: **`uptime.s51ops.com`** (used throughout below).
+3. Pick the hostname now: **`uptime.s51status.com`** (used throughout below).
 
 ### 5.2 Turn on Zero Trust
 
@@ -281,20 +317,23 @@ systemctl status cloudflared        # should be active, "Registered tunnel conne
 
 ### 5.4 Route the hostname to the app
 
-Back in the tunnel's page → **Public Hostnames → Add a public hostname**:
+Back in the tunnel's page → **Published application routes** tab (Cloudflare's current
+name for what used to be called "Public Hostnames" — don't use the **Hostname routes**
+tab, that's for WARP/private-network routing, a different feature) → **Add route** →
+**Published application**:
 
 | Field | Value |
 | --- | --- |
 | Subdomain | `uptime` |
-| Domain | `s51ops.com` |
+| Domain | `s51status.com` |
 | Type | `HTTP` |
 | URL | `127.0.0.1:3000` |
 
 Save. Cloudflare auto‑creates the proxied `CNAME uptime → <tunnel-id>.cfargotunnel.com`.
-Do **not** add any other public hostname on this tunnel unless it also gets an Access
-policy.
+Do **not** add any other published application route on this tunnel unless it also gets
+an Access policy.
 
-At this point `https://uptime.s51ops.com` resolves and reaches the app — **but it is
+At this point `https://uptime.s51status.com` resolves and reaches the app — **but it is
 still wide open**. Lock it down before sharing the URL:
 
 ---
@@ -303,12 +342,21 @@ still wide open**. Lock it down before sharing the URL:
 
 ### 6.1 Identity provider
 
-Zero Trust → **Settings → Authentication**. Two easy paths:
+Zero Trust → **Settings → Authentication**. Worth knowing up front: **Access login is a
+separate system from your cloudflare.com dashboard login.** There's no "sign in with your
+existing Cloudflare account" option — and setting up Google as an Access IdP means
+registering a real OAuth client against Google Workspace, it doesn't just reuse the
+"Login with Google" button people already use to reach the Cloudflare dashboard.
 
-- **Google Workspace** (if Surface 51 uses Google for email): add **Google** as an IdP,
-  authorize it against the `surface51.com` workspace. Cleanest — real SSO.
-- **One‑time PIN** (no IdP setup): enabled by default. Access emails a 6‑digit code to
-  the address the user types; the policy still restricts *which* addresses work.
+- **One‑time PIN — use this for S51** (zero IdP setup, no passwords involved at all):
+  enabled by default. Access emails a 6‑digit code to the address the user types; the
+  policy still restricts *which* addresses work (`@surface51.com`, Part 6.2). Since the
+  team already reaches Cloudflare itself via Google SSO and has no separate Cloudflare
+  passwords, this sidesteps both problems in one move — no Workspace OAuth app to
+  register, and nothing password-shaped to fail.
+- **Google Workspace** (skip for now): add **Google** as an IdP, authorize it against the
+  `surface51.com` workspace via a Google Cloud OAuth client. More setup than this plan
+  needs; revisit only if OTP-via-email ever becomes a real friction point.
 
 ### 6.2 Application + policy
 
@@ -318,8 +366,8 @@ Zero Trust → **Access → Applications → Add an application → Self‑hoste
 | --- | --- |
 | Application name | `Site Uptime Checker` |
 | Session duration | `24 hours` |
-| Application domain | `uptime.s51ops.com` |
-| Identity providers | Google (and/or One‑time PIN) |
+| Application domain | `uptime.s51status.com` |
+| Identity providers | One‑time PIN |
 
 Then **Add policy**:
 
@@ -336,7 +384,7 @@ matched is denied by default. Save.
 
 ```bash
 # From anywhere NOT logged in (or curl):
-curl -sI https://uptime.s51ops.com/ | grep -i location
+curl -sI https://uptime.s51status.com/ | grep -i location
 #   → 302 to https://<team>.cloudflareaccess.com/...   ✅ gated
 ```
 
@@ -345,8 +393,8 @@ as an `@surface51.com` user, then land on the dashboard. Try a non‑S51 address
 
 ### 6.4 CLI / curl access (optional)
 
-For terminal use behind Access: `cloudflared access login https://uptime.s51ops.com`
-opens a browser once, then `cloudflared access curl https://uptime.s51ops.com/api/...`
+For terminal use behind Access: `cloudflared access login https://uptime.s51status.com`
+opens a browser once, then `cloudflared access curl https://uptime.s51status.com/api/...`
 works with the cached token.
 
 ---
@@ -408,9 +456,11 @@ sudo systemctl restart siteuptime
 ### 8.2 First backfill (one‑off, manual)
 
 ```bash
+cd /opt/siteuptime
+npm run logs:sync -- --max-age-days 30      # bounded first pull, runs as you (jack)
+
 sudo -iu uptime
 cd /opt/siteuptime
-npm run logs:sync -- --max-age-days 30      # bounded first pull
 npm run logs:ingest -- --jobs 12 --threads 12 --memory 24GB
 ```
 
@@ -435,7 +485,7 @@ Health) to email the team if the connector drops.
 Point something *outside* the workstation at the hostname so you learn when it dies:
 
 - Cheapest: an external checker (UptimeRobot free, or a `curl` cron on any other box)
-  hitting `https://uptime.s51ops.com/` and expecting **HTTP 302** (the Access redirect).
+  hitting `https://uptime.s51status.com/` and expecting **HTTP 302** (the Access redirect).
   If the workstation or tunnel is down, Cloudflare returns `530`/`1033` instead — the
   check fails and you get paged.
 - End‑to‑end: create an Access **service token**, add a second policy (Action *Service
@@ -446,7 +496,7 @@ Point something *outside* the workstation at the hostname so you learn when it d
 ### 8.5 Reboot test
 
 Before you rely on it: `sudo reboot`, wait, then from another machine confirm
-`https://uptime.s51ops.com` loads after login and `systemctl is-active siteuptime
+`https://uptime.s51status.com` loads after login and `systemctl is-active siteuptime
 cloudflared siteuptime-sync.timer` all report `active`.
 
 ---
@@ -479,9 +529,10 @@ policy and hostname don't change.
 - [ ] `/etc/siteuptime.env` is `640 root:uptime`; restic password file `600`
 - [ ] `cloudflared` running as a system service, tunnel shows healthy
 - [ ] Access policy tested: `@surface51.com` in, everyone else 302→denied
-- [ ] No second public hostname on the tunnel without its own policy
-- [ ] `terminus` authenticated + SSH keys installed under `/home/uptime/.ssh` for `logs:sync`
+- [ ] No second published application route on the tunnel without its own policy
+- [ ] `jack` added to the `uptime` group; `/srv/siteuptime/log-ingress` is `2775 uptime:uptime`
+- [ ] `terminus auth:login` run as `jack` (session lives in `/home/jack/.terminus`); SSH host aliases in `/home/jack/.ssh/config` reachable password‑less
 - [ ] Nightly `uptime.db` backup ran and a test restore worked
-- [ ] External meta‑monitor on `uptime.s51ops.com` reporting green
+- [ ] External meta‑monitor on `uptime.s51status.com` reporting green
 - [ ] Tunnel Health notification enabled
 ```

@@ -34,6 +34,22 @@ function expandTilde(p: string): string {
   return p.startsWith('~/') ? join(homedir(), p.slice(2)) : p
 }
 
+/**
+ * The useful part of a failed rsync/ssh invocation. execFile's rejection `.message` is
+ * `Command failed: <full command>\n<stderr>` — the first line is just the command we already
+ * know, and the actual reason (ssh auth failure, rsync protocol error, ...) is the last
+ * non-empty stderr line. Falls back to the message's first line for non-exec errors.
+ */
+export function shortError(err: unknown): string {
+  const e = err as { stderr?: string; message?: string } | undefined
+  const stderr = typeof e?.stderr === 'string' ? e.stderr.trim() : ''
+  if (stderr) {
+    const lines = stderr.split('\n').filter(Boolean)
+    return lines[lines.length - 1] ?? stderr
+  }
+  return String(e?.message ?? err).split('\n')[0]!
+}
+
 /** The `-e` value for rsync. rsync word-splits this on spaces, so no path with spaces. */
 export function sshCommand(ssh: SshTarget): string {
   const parts = ['ssh']
