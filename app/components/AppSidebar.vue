@@ -21,6 +21,31 @@ const footnote = computed(() => {
   const tagCount = tags.value?.length ?? 0
   return `${siteCount} ${siteCount === 1 ? 'site' : 'sites'} · ${tagCount} ${tagCount === 1 ? 'tag' : 'tags'} tracked`
 })
+
+// Slideout menu for < lg. Replaces the old inline nav row, which overflowed
+// off-screen once there were enough nav items to not fit a phone width.
+const menuOpen = ref(false)
+
+function closeMenu() {
+  menuOpen.value = false
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && menuOpen.value) closeMenu()
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+  document.body.style.overflow = ''
+})
+
+watch(menuOpen, (open) => {
+  document.body.style.overflow = open ? 'hidden' : ''
+})
+
+const route = useRoute()
+watch(() => route.fullPath, closeMenu)
 </script>
 
 <template>
@@ -78,10 +103,25 @@ const footnote = computed(() => {
     </div>
   </aside>
 
-  <!-- Compact top bar below lg; same destinations, no drawer state to manage. -->
+  <!-- Compact top bar below lg: hamburger opens the slideout menu instead of
+       cramming all nav destinations into the bar, which is what overflowed
+       on narrow screens. -->
   <header
-    class="sticky top-0 z-20 flex items-center gap-4 bg-black px-5 py-3 text-white lg:hidden"
+    class="sticky top-0 z-20 flex items-center gap-3 bg-black px-5 py-3 text-white lg:hidden"
   >
+    <button
+      type="button"
+      aria-label="Open menu"
+      class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition-colors hover:bg-white/10"
+      @click="menuOpen = true"
+    >
+      <UiIcon name="menu" :size="22" />
+      <span
+        v-if="unreadCount > 0"
+        class="absolute top-1 right-1 h-2 w-2 rounded-full bg-accent"
+        aria-hidden="true"
+      />
+    </button>
     <NuxtLink to="/" class="flex items-center gap-2 no-underline">
       <span
         class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-accent font-display text-[10px] font-extrabold text-accent"
@@ -90,27 +130,105 @@ const footnote = computed(() => {
       </span>
       <span class="font-display text-sm font-bold tracking-tight text-white">Site Uptime</span>
     </NuxtLink>
-    <nav class="flex items-center gap-1">
-      <NuxtLink
-        v-for="item in navItems"
-        :key="item.to"
-        :to="item.to"
-        :exact-active-class="item.exact ? 'bg-accent! text-white!' : ''"
-        :active-class="item.exact ? '' : 'bg-accent! text-white!'"
-        class="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium text-neutral-300 no-underline transition-colors duration-100 ease-snappy hover:bg-white/10 hover:text-white"
-        :aria-label="item.label"
-      >
-        <UiIcon :name="item.icon" :size="17" />
-        <span
-          v-if="item.to === '/notifications' && unreadCount > 0"
-          class="rounded-full bg-accent px-1.5 text-[10px] font-bold text-white"
-        >
-          {{ unreadCount }}
-        </span>
-      </NuxtLink>
-    </nav>
     <div class="ml-auto">
       <UiThemeToggle />
     </div>
   </header>
+
+  <Teleport to="body">
+    <Transition name="drawer-overlay">
+      <div
+        v-if="menuOpen"
+        class="fixed inset-0 z-[100] bg-black/50 lg:hidden"
+        @click="closeMenu"
+      />
+    </Transition>
+    <Transition name="drawer-panel">
+      <aside
+        v-if="menuOpen"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Main menu"
+        class="fixed inset-y-0 left-0 z-[100] flex w-[280px] max-w-[85vw] flex-col gap-8 bg-black px-5 py-6 text-white lg:hidden"
+      >
+        <div class="flex items-center justify-between">
+          <NuxtLink to="/" class="flex items-center gap-2.5 no-underline" @click="closeMenu">
+            <span
+              class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border-2 border-accent font-display text-xs font-extrabold text-accent"
+            >
+              S51
+            </span>
+            <span class="flex flex-col leading-tight">
+              <span class="font-display text-base font-bold tracking-tight text-white">Site Uptime</span>
+              <span class="text-[10px] tracking-wide text-neutral-400 uppercase">Surface 51</span>
+            </span>
+          </NuxtLink>
+          <button
+            type="button"
+            aria-label="Close menu"
+            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition-colors hover:bg-white/10"
+            @click="closeMenu"
+          >
+            <UiIcon name="close" :size="20" />
+          </button>
+        </div>
+
+        <nav class="flex flex-col gap-1">
+          <NuxtLink
+            v-for="item in navItems"
+            :key="item.to"
+            :to="item.to"
+            :exact-active-class="item.exact ? 'bg-accent! text-white! font-semibold' : ''"
+            :active-class="item.exact ? '' : 'bg-accent! text-white! font-semibold'"
+            class="flex items-center justify-between gap-2.5 rounded-full px-3 py-2.5 text-sm font-medium text-neutral-300 no-underline transition-colors duration-100 ease-snappy hover:bg-white/10 hover:text-white"
+            @click="closeMenu"
+          >
+            <span class="flex items-center gap-2.5">
+              <UiIcon :name="item.icon" :size="19" />
+              {{ item.label }}
+            </span>
+            <span
+              v-if="item.to === '/notifications' && unreadCount > 0"
+              class="rounded-full bg-accent px-[7px] py-px text-[11px] font-bold text-white"
+            >
+              {{ unreadCount }}
+            </span>
+          </NuxtLink>
+        </nav>
+
+        <div class="mt-auto flex flex-col gap-4">
+          <button
+            type="button"
+            class="flex items-center gap-2 rounded-full border border-white/15 px-3 py-2 text-xs text-neutral-300 transition-colors hover:bg-white/10 hover:text-white"
+            @click="closeMenu(); openCommandPalette()"
+          >
+            <UiIcon name="search" :size="15" />
+            Quick jump
+            <kbd class="ml-auto rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px]">⌘K</kbd>
+          </button>
+          <p class="text-[11px] leading-relaxed text-neutral-500">{{ footnote }}</p>
+        </div>
+      </aside>
+    </Transition>
+  </Teleport>
 </template>
+
+<style scoped>
+.drawer-overlay-enter-active,
+.drawer-overlay-leave-active {
+  transition: opacity 0.2s var(--ease-snappy);
+}
+.drawer-overlay-enter-from,
+.drawer-overlay-leave-to {
+  opacity: 0;
+}
+
+.drawer-panel-enter-active,
+.drawer-panel-leave-active {
+  transition: transform 0.2s var(--ease-snappy);
+}
+.drawer-panel-enter-from,
+.drawer-panel-leave-to {
+  transform: translateX(-100%);
+}
+</style>
