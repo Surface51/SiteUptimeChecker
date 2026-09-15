@@ -144,6 +144,28 @@ sudo ufw enable
 
 ### 3.5 Build the app
 
+If the repo is private, `uptime` needs its own credentials to clone/pull it — a personal
+SSH agent forwarded in for one interactive clone won't help later unattended `deploy.sh`
+runs (Part 8.1). Use a GitHub **deploy key**: a keypair scoped to just this repo, read-only,
+independent of any person's account.
+
+```bash
+sudo -iu uptime
+ssh-keygen -t ed25519 -C "uptime@$(hostname)-siteuptime-deploy" -f ~/.ssh/id_ed25519 -N ""
+cat ~/.ssh/id_ed25519.pub
+# → paste into GitHub: repo → Settings → Deploy keys → Add deploy key
+#   (leave "Allow write access" unchecked — pull-only)
+
+cat > ~/.ssh/config <<'CFG'
+Host github.com
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+CFG
+chmod 600 ~/.ssh/config
+ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+exit
+```
+
 ```bash
 sudo -iu uptime
 git clone <repo-url> /opt/siteuptime && cd /opt/siteuptime

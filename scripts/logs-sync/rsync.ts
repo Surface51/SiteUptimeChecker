@@ -37,14 +37,18 @@ function expandTilde(p: string): string {
 /**
  * The useful part of a failed rsync/ssh invocation. execFile's rejection `.message` is
  * `Command failed: <full command>\n<stderr>` — the first line is just the command we already
- * know, and the actual reason (ssh auth failure, rsync protocol error, ...) is the last
- * non-empty stderr line. Falls back to the message's first line for non-exec errors.
+ * know. The last stderr line is usually just rsync's generic `rsync error: ... (code N) at
+ * main.c(...)` footer, not the cause — the actual per-item diagnostic is an earlier line
+ * prefixed `rsync:` (no "error"), e.g. `rsync: [receiver] mkstemp "..." failed: Permission
+ * denied (13)`. Prefer that; fall back to the last line, then the message's first line.
  */
 export function shortError(err: unknown): string {
   const e = err as { stderr?: string; message?: string } | undefined
   const stderr = typeof e?.stderr === 'string' ? e.stderr.trim() : ''
   if (stderr) {
-    const lines = stderr.split('\n').filter(Boolean)
+    const lines = stderr.split('\n').map((l) => l.trim()).filter(Boolean)
+    const detail = lines.filter((l) => l.startsWith('rsync:') && !l.startsWith('rsync error:'))
+    if (detail.length > 0) return detail.join(' / ')
     return lines[lines.length - 1] ?? stderr
   }
   return String(e?.message ?? err).split('\n')[0]!
