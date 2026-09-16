@@ -185,7 +185,7 @@ const ranForLabel = computed(() => {
     </div>
     <div
       ref="consoleEl"
-      class="max-h-[13.5rem] overflow-y-auto rounded-md bg-sunken px-2 py-1.5 font-mono text-xs leading-10"
+      class="max-h-[6.5rem] overflow-y-auto rounded-md bg-sunken px-2 py-1.5 font-mono text-xs leading-10"
     >
       <p v-for="(entry, i) in consoleLines" :key="i" class="truncate text-tertiary">
         <template v-if="entry.kind === 'file'">
