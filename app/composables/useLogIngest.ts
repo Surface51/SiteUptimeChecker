@@ -22,6 +22,9 @@ const EMPTY: IngestStatus = {
 // consumer, so the panel and any other view stay in step without opening a stream each.
 const status = ref<IngestStatus>({ ...EMPTY })
 const connected = ref(false)
+// Whether the finished-run view has been dismissed. A singleton alongside `status` — since
+// every view shares one run's status, dismissing it is a property of the run, not the view.
+const dismissed = ref(false)
 let source: EventSource | null = null
 let refCount = 0
 
@@ -40,6 +43,7 @@ function open() {
       const next = JSON.parse(event.data) as IngestStatus
       const wasRunning = status.value.running
       status.value = next
+      if (!wasRunning && next.running) dismissed.value = false
       if (wasRunning && !next.running) {
         for (const listener of finishListeners) listener()
       }
@@ -74,6 +78,15 @@ export function useLogIngest() {
     return filesTotal > 0 ? Math.round((filesDone / filesTotal) * 100) : 0
   })
 
+  // Whether there's anything to show at all: a run in progress, or a finished one not yet
+  // dismissed. Stays true across the running→finished transition so the view doesn't
+  // collapse on its own — only dismiss() or a new run changes it.
+  const hasRun = computed(() => status.value.running || status.value.startedAt !== null)
+
+  function dismiss() {
+    dismissed.value = true
+  }
+
   const starting = ref(false)
   const stopping = ref(false)
 
@@ -104,5 +117,17 @@ export function useLogIngest() {
     onUnmounted(() => finishListeners.delete(fn))
   }
 
-  return { status, connected, progress, starting, stopping, runIngest, stopIngest, onFinished }
+  return {
+    status,
+    connected,
+    progress,
+    starting,
+    stopping,
+    hasRun,
+    dismissed,
+    dismiss,
+    runIngest,
+    stopIngest,
+    onFinished,
+  }
 }

@@ -2,6 +2,7 @@
 import type { IngestStatus } from '#shared/types'
 
 const props = defineProps<{ status: IngestStatus; progress: number }>()
+const emit = defineEmits<{ close: [] }>()
 
 function shortName(path: string) {
   return path.split('/').slice(-3).join('/')
@@ -135,6 +136,19 @@ const etaLabel = computed(() => {
   const remainingMs = (filesTotal - filesDone) / rate
   return formatDuration(remainingMs)
 })
+
+const finishedLabel = computed(() => {
+  if (!props.status.finishedAt) return null
+  const when = new Date(props.status.finishedAt)
+  return Number.isNaN(when.getTime()) ? null : when.toLocaleString()
+})
+
+const ranForLabel = computed(() => {
+  const { startedAt, finishedAt } = props.status
+  if (!startedAt || !finishedAt) return null
+  const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime()
+  return Number.isNaN(ms) ? null : formatDuration(ms)
+})
 </script>
 
 <template>
@@ -146,7 +160,22 @@ const etaLabel = computed(() => {
         <span v-else-if="status.stopRequested" class="text-tertiary">· stopping…</span>
         <span v-else-if="etaLabel" class="text-tertiary">· ~{{ etaLabel }} left</span>
       </span>
-      <span>{{ progress }}%</span>
+      <span class="flex items-center gap-3">
+        {{ progress }}%
+        <button
+          v-if="!status.running"
+          type="button"
+          class="cursor-pointer text-tertiary transition-colors hover:text-primary"
+          aria-label="Dismiss"
+          @click="emit('close')"
+        >
+          <UiIcon name="close" :size="16" />
+        </button>
+      </span>
+    </div>
+    <div v-if="!status.running && finishedLabel" class="text-xs text-tertiary">
+      Finished {{ finishedLabel }}
+      <span v-if="ranForLabel">· took {{ ranForLabel }}</span>
     </div>
     <div class="h-1.5 overflow-hidden rounded-full bg-sunken">
       <div

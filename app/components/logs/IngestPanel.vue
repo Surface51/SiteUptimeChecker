@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { status, progress, starting, runIngest, onFinished } = useLogIngest()
+const { status, progress, starting, hasRun, dismissed, dismiss, runIngest, onFinished } = useLogIngest()
 
 const emit = defineEmits<{ finished: [] }>()
 onFinished(() => emit('finished'))
@@ -9,10 +9,6 @@ const finishedLabel = computed(() => {
   const when = new Date(status.value.finishedAt)
   return Number.isNaN(when.getTime()) ? null : when.toLocaleString()
 })
-
-// Keeps the progress view (and its file console) on screen after a run finishes instead of
-// collapsing straight to the one-line summary — it only resets once the next run starts.
-const hasRun = computed(() => status.value.running || status.value.startedAt !== null)
 </script>
 
 <template>
@@ -27,11 +23,9 @@ const hasRun = computed(() => status.value.running || status.value.startedAt !==
         </template>
       </UiSectionHeading>
 
-      <LogsIngestProgress v-if="hasRun" :status="status" :progress="progress" />
-      <div v-else class="text-sm text-secondary">No run yet this session.</div>
-
+      <LogsIngestProgress v-if="hasRun && !dismissed" :status="status" :progress="progress" @close="dismiss" />
       <div
-        v-if="!status.running && finishedLabel"
+        v-else-if="hasRun"
         class="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm text-secondary"
       >
         <span>Last run {{ finishedLabel }}</span>
@@ -39,6 +33,7 @@ const hasRun = computed(() => status.value.running || status.value.startedAt !==
           {{ status.filesTotal }} files · {{ status.filesSkipped }} unchanged
         </span>
       </div>
+      <div v-else class="text-sm text-secondary">No run yet this session.</div>
 
       <div v-if="status.errors.length" class="flex flex-col gap-1 rounded-md bg-down-tint p-3">
         <span class="text-xs font-semibold tracking-wide text-down uppercase">
