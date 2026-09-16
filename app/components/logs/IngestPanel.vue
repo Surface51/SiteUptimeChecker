@@ -1,14 +1,8 @@
 <script setup lang="ts">
-const { status, progress, starting, hasRun, dismissed, dismiss, runIngest, onFinished } = useLogIngest()
+const { status, progress, starting, hasRun, collapsed, toggleCollapsed, runIngest, onFinished } = useLogIngest()
 
 const emit = defineEmits<{ finished: [] }>()
 onFinished(() => emit('finished'))
-
-const finishedLabel = computed(() => {
-  if (!status.value.finishedAt) return null
-  const when = new Date(status.value.finishedAt)
-  return Number.isNaN(when.getTime()) ? null : when.toLocaleString()
-})
 </script>
 
 <template>
@@ -23,16 +17,13 @@ const finishedLabel = computed(() => {
         </template>
       </UiSectionHeading>
 
-      <LogsIngestProgress v-if="hasRun && !dismissed" :status="status" :progress="progress" @close="dismiss" />
-      <div
-        v-else-if="hasRun"
-        class="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm text-secondary"
-      >
-        <span>Last run {{ finishedLabel }}</span>
-        <span v-if="status.filesTotal">
-          {{ status.filesTotal }} files · {{ status.filesSkipped }} unchanged
-        </span>
-      </div>
+      <LogsIngestProgress
+        v-if="hasRun"
+        :status="status"
+        :progress="progress"
+        :collapsed="collapsed"
+        @toggle="toggleCollapsed"
+      />
       <div v-else class="text-sm text-secondary">No run yet this session.</div>
 
       <div v-if="status.errors.length" class="flex flex-col gap-1 rounded-md bg-down-tint p-3">

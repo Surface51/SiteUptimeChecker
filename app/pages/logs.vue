@@ -74,7 +74,7 @@ const { data, pending, refresh } = await useFetch<LogStatusResponse>('/api/logs/
   }),
 })
 
-const { status, progress, starting, stopping, hasRun, dismissed, dismiss, runIngest, stopIngest, onFinished } =
+const { status, progress, starting, stopping, hasRun, collapsed, toggleCollapsed, runIngest, stopIngest, onFinished } =
   useLogIngest()
 
 // Re-pull the folder table when a run ends, and keep it fresh while one is going.
@@ -266,11 +266,12 @@ async function purgeFolder(slug: string) {
     </UiCard>
 
     <LogsIngestProgress
-      v-if="hasRun && !dismissed"
+      v-if="hasRun"
       :status="status"
       :progress="progress"
+      :collapsed="collapsed"
       class="rounded-lg border border-border-default bg-raised px-5 py-4"
-      @close="dismiss"
+      @toggle="toggleCollapsed"
     />
 
     <LogsDataTable

@@ -24,9 +24,9 @@ const EMPTY: IngestStatus = {
 // consumer, so the panel and any other view stay in step without opening a stream each.
 const status = ref<IngestStatus>({ ...EMPTY })
 const connected = ref(false)
-// Whether the finished-run view has been dismissed. A singleton alongside `status` — since
-// every view shares one run's status, dismissing it is a property of the run, not the view.
-const dismissed = ref(false)
+// Whether the progress view is collapsed to its header. A singleton alongside `status` — every
+// view shares one run's status, so collapsing it is a property of the run, not the view.
+const collapsed = ref(false)
 let source: EventSource | null = null
 let refCount = 0
 
@@ -45,7 +45,8 @@ function open() {
       const next = JSON.parse(event.data) as IngestStatus
       const wasRunning = status.value.running
       status.value = next
-      if (!wasRunning && next.running) dismissed.value = false
+      // A new run starting re-expands the view — you want to see progress once it's live.
+      if (!wasRunning && next.running) collapsed.value = false
       if (wasRunning && !next.running) {
         for (const listener of finishListeners) listener()
       }
@@ -80,13 +81,12 @@ export function useLogIngest() {
     return filesTotal > 0 ? Math.round((filesDone / filesTotal) * 100) : 0
   })
 
-  // Whether there's anything to show at all: a run in progress, or a finished one not yet
-  // dismissed. Stays true across the running→finished transition so the view doesn't
-  // collapse on its own — only dismiss() or a new run changes it.
+  // Whether there's anything to show at all: a run in progress, or a finished one. Stays true
+  // across the running→finished transition so the view doesn't disappear on its own.
   const hasRun = computed(() => status.value.running || status.value.startedAt !== null)
 
-  function dismiss() {
-    dismissed.value = true
+  function toggleCollapsed() {
+    collapsed.value = !collapsed.value
   }
 
   const starting = ref(false)
@@ -126,8 +126,8 @@ export function useLogIngest() {
     starting,
     stopping,
     hasRun,
-    dismissed,
-    dismiss,
+    collapsed,
+    toggleCollapsed,
     runIngest,
     stopIngest,
     onFinished,

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { IngestStatus } from '#shared/types'
 
-const props = defineProps<{ status: IngestStatus; progress: number }>()
-const emit = defineEmits<{ close: [] }>()
+const props = defineProps<{ status: IngestStatus; progress: number; collapsed: boolean }>()
+const emit = defineEmits<{ toggle: [] }>()
 
 function shortName(path: string) {
   return path.split('/').slice(-3).join('/')
@@ -92,65 +92,61 @@ const ranForLabel = computed(() => {
 
 <template>
   <div class="flex flex-col gap-2">
-    <div class="flex items-center justify-between text-sm text-secondary">
-      <span>
+    <button
+      type="button"
+      class="flex cursor-pointer items-center justify-between gap-3 text-sm text-secondary"
+      @click="emit('toggle')"
+    >
+      <span class="flex items-center gap-1.5">
+        <UiIcon :name="collapsed ? 'chevron_right' : 'expand_more'" :size="16" class="text-tertiary" />
         {{ status.filesDone }} of {{ status.filesTotal }} files
         <span v-if="status.source === 'cli'" class="text-tertiary">· external ingest</span>
         <span v-else-if="status.stopRequested" class="text-tertiary">· stopping…</span>
         <span v-else-if="etaLabel" class="text-tertiary">· ~{{ etaLabel }} left</span>
       </span>
-      <span class="flex items-center gap-3">
-        {{ progress }}%
-        <button
-          v-if="!status.running"
-          type="button"
-          class="cursor-pointer text-tertiary transition-colors hover:text-primary"
-          aria-label="Dismiss"
-          @click="emit('close')"
-        >
-          <UiIcon name="close" :size="16" />
-        </button>
-      </span>
-    </div>
-    <div v-if="!status.running && finishedLabel" class="text-xs text-tertiary">
-      Finished {{ finishedLabel }}
-      <span v-if="ranForLabel">· took {{ ranForLabel }}</span>
-    </div>
-    <div class="h-1.5 overflow-hidden rounded-full bg-sunken">
+      <span>{{ progress }}%</span>
+    </button>
+    <template v-if="!collapsed">
+      <div v-if="!status.running && finishedLabel" class="text-xs text-tertiary">
+        Finished {{ finishedLabel }}
+        <span v-if="ranForLabel">· took {{ ranForLabel }}</span>
+      </div>
+      <div class="h-1.5 overflow-hidden rounded-full bg-sunken">
+        <div
+          class="h-full rounded-full bg-accent transition-[width] duration-300 ease-snappy"
+          :style="{ width: `${progress}%` }"
+        />
+      </div>
       <div
-        class="h-full rounded-full bg-accent transition-[width] duration-300 ease-snappy"
-        :style="{ width: `${progress}%` }"
-      />
-    </div>
-    <div
-      ref="consoleEl"
-      class="max-h-[13rem] overflow-y-auto rounded-md bg-sunken px-2 py-1.5 font-mono text-xs leading-4"
-    >
-      <p
-        v-for="(entry, i) in status.log"
-        :key="i"
-        class="break-all"
-        :class="entry.kind === 'file' || entry.kind === 'skip-tally' ? 'pl-3 text-tertiary' : 'text-secondary'"
+        ref="consoleEl"
+        class="max-h-[13rem] overflow-y-auto rounded-md bg-sunken px-2 py-1.5 font-mono text-xs leading-4"
       >
-        <template v-if="entry.kind === 'folder'">{{ entry.folder }}</template>
-        <template v-else-if="entry.kind === 'folder-skipped'">
-          <span class="text-tertiary">⤳</span> {{ entry.folder }} skipped
-          <span class="text-tertiary/70">({{ entry.count }} {{ entry.count === 1 ? 'file' : 'files' }})</span>
-        </template>
-        <template v-else-if="entry.kind === 'skip-tally'">
-          <span class="text-tertiary">⤳</span> {{ entry.count }} {{ entry.count === 1 ? 'file' : 'files' }} skipped
-        </template>
-        <template v-else>
-          <span :class="entry.ok ? 'text-tertiary' : 'text-down'">{{ entry.ok ? '✓' : '✗' }}</span>
-          {{ entry.file }}
-        </template>
-      </p>
-      <p v-if="currentFileName" class="break-all text-secondary">
-        <span class="text-accent">▸</span> {{ currentFileName }}…
-      </p>
-      <p v-else-if="livePendingSkipped > 0" class="break-all text-secondary">
-        <span class="text-tertiary">⤳</span> {{ status.currentFolder }} — {{ livePendingSkipped }} unchanged…
-      </p>
-    </div>
+        <p
+          v-for="(entry, i) in status.log"
+          :key="i"
+          class="break-all"
+          :class="entry.kind === 'file' || entry.kind === 'skip-tally' ? 'pl-3 text-tertiary' : 'text-secondary'"
+        >
+          <template v-if="entry.kind === 'folder'">{{ entry.folder }}</template>
+          <template v-else-if="entry.kind === 'folder-skipped'">
+            <span class="text-tertiary">⤳</span> {{ entry.folder }} skipped
+            <span class="text-tertiary/70">({{ entry.count }} {{ entry.count === 1 ? 'file' : 'files' }})</span>
+          </template>
+          <template v-else-if="entry.kind === 'skip-tally'">
+            <span class="text-tertiary">⤳</span> {{ entry.count }} {{ entry.count === 1 ? 'file' : 'files' }} skipped
+          </template>
+          <template v-else>
+            <span :class="entry.ok ? 'text-tertiary' : 'text-down'">{{ entry.ok ? '✓' : '✗' }}</span>
+            {{ entry.file }}
+          </template>
+        </p>
+        <p v-if="currentFileName" class="break-all text-secondary">
+          <span class="text-accent">▸</span> {{ currentFileName }}…
+        </p>
+        <p v-else-if="livePendingSkipped > 0" class="break-all text-secondary">
+          <span class="text-tertiary">⤳</span> {{ status.currentFolder }} — {{ livePendingSkipped }} unchanged…
+        </p>
+      </div>
+    </template>
   </div>
 </template>
