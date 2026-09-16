@@ -282,16 +282,12 @@ async function doRunIngest(rootsOverride: string[] | undefined, opts: RunIngestO
 
         const spec = PARSER_REGISTRY[file.classified.logType]
         if (!spec || !plan.needsIngest) {
-          // Touch currentFile even for a skip so the UI's file-by-file log has something to
-          // show on runs where most/all files are already ingested, not just real parses.
-          status.currentFile = file.absPath
-          status.currentFileBytesTotal = file.size
-          status.currentFileBytesDone = file.size
-          emitProgress()
-
+          // Deliberately doesn't touch currentFile: a re-run can skip thousands of unchanged
+          // files in seconds, and giving each one its own currentFile transition flooded the
+          // SSE stream (and the UI that reacted to every message). The UI derives a single
+          // "N unchanged" summary from filesSkipped instead of per-file events.
           status.filesSkipped++
           status.filesDone++
-          status.currentFile = null
           emitProgress()
           return
         }
