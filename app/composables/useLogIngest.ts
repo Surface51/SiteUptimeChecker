@@ -17,6 +17,7 @@ const EMPTY: IngestStatus = {
   currentFileBytesTotal: 0,
   currentFileBytesDone: 0,
   errors: [],
+  log: [],
 }
 
 // Module-level singleton, like useLighthouseProgress: one event stream shared by every mounted

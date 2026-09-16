@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { readSync, openSync, closeSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DuckDBConnection } from '@duckdb/node-api'
-import type { IngestStatus } from '#shared/types'
+import type { IngestLogEntry, IngestStatus } from '#shared/types'
 import { discoverRoots, type DiscoveredFile } from '../discovery'
 import { getLogIngressDir } from '../config'
 import { withLogWrite, recycleLogWriteConnection } from '../logDb'
@@ -19,6 +19,9 @@ export const ingestEvents = new EventEmitter()
 export type { IngestStatus }
 
 const MAX_ERRORS = 200
+// A backstop against runaway growth, not a UX limit — a run touching this many folders/files
+// is not realistic, but the log rides along on every SSE message so it shouldn't grow forever.
+const MAX_LOG_ENTRIES = 5000
 
 function emptyStatus(): IngestStatus {
   return {
@@ -36,10 +39,41 @@ function emptyStatus(): IngestStatus {
     currentFileBytesTotal: 0,
     currentFileBytesDone: 0,
     errors: [],
+    log: [],
   }
 }
 
 let status: IngestStatus = emptyStatus()
+
+// A folder is buffered here — not committed to status.log — until it closes (the next folder
+// starts, or the run ends). That's what lets a folder that turned out to be entirely unchanged
+// collapse to one "<folder> skipped" line instead of one line per file, while a folder with
+// real activity still expands into its header + per-file lines. Lives outside `status` (and so
+// outside emptyStatus()) because it's build-up bookkeeping, not something the UI reads.
+let pendingFolder: string | null = null
+let pendingSkipCount = 0
+let pendingFiles: { file: string; ok: boolean }[] = []
+
+function pushLogEntry(entry: IngestLogEntry) {
+  status.log.push(entry)
+  if (status.log.length > MAX_LOG_ENTRIES) status.log.splice(0, status.log.length - MAX_LOG_ENTRIES)
+}
+
+function commitFolder() {
+  if (!pendingFolder) return
+  if (pendingFiles.length === 0) {
+    if (pendingSkipCount > 0) {
+      pushLogEntry({ kind: 'folder-skipped', folder: pendingFolder, count: pendingSkipCount })
+    }
+  } else {
+    pushLogEntry({ kind: 'folder', folder: pendingFolder })
+    if (pendingSkipCount > 0) pushLogEntry({ kind: 'skip-tally', count: pendingSkipCount })
+    for (const file of pendingFiles) pushLogEntry({ kind: 'file', ...file })
+  }
+  pendingFolder = null
+  pendingSkipCount = 0
+  pendingFiles = []
+}
 
 /** The in-flight run, so a caller (e.g. the DB-detach endpoint) can await it winding down. */
 let currentRun: Promise<IngestStatus> | null = null
@@ -47,8 +81,8 @@ let currentRun: Promise<IngestStatus> | null = null
 export function getIngestStatus(): IngestStatus {
   // While the database is handed off to the CLI, the CLI's relayed status is the live one.
   const external = getExternalIngestStatus()
-  if (external) return { ...external, errors: [...external.errors] }
-  return { ...status, errors: [...status.errors] }
+  if (external) return { ...external, errors: [...external.errors], log: [...external.log] }
+  return { ...status, errors: [...status.errors], log: [...status.log] }
 }
 
 /** The promise of the run in progress, or null if idle. */
@@ -266,6 +300,9 @@ async function doRunIngest(rootsOverride: string[] | undefined, opts: RunIngestO
     startedAt: new Date().toISOString(),
     filesTotal: discovered.length,
   }
+  pendingFolder = null
+  pendingSkipCount = 0
+  pendingFiles = []
   emitProgress()
 
   let stopped = false
@@ -281,21 +318,29 @@ async function doRunIngest(rootsOverride: string[] | undefined, opts: RunIngestO
         const serverId = await getOrCreateServer(conn, siteId, file.env, file.ip, file.role)
         const plan = await planFile(conn, file, serverId)
 
+        // A folder boundary: commit whatever was buffered for the previous one (as one
+        // collapsed line if it was all skips, or a header + itemized lines otherwise) before
+        // starting to buffer this one. discoverRoots groups all of a site's files together, so
+        // this only fires once per folder, not once per file.
+        if (file.site !== pendingFolder) {
+          commitFolder()
+          pendingFolder = file.site
+        }
+        status.currentFolder = file.site
+
         const spec = PARSER_REGISTRY[file.classified.logType]
         if (!spec || !plan.needsIngest) {
           // Deliberately doesn't touch currentFile: a re-run can skip thousands of unchanged
           // files in seconds, and giving each one its own currentFile transition flooded the
-          // SSE stream (and the UI that reacted to every message). currentFolder only changes
-          // once per folder rather than once per file, so it's cheap to set on every skip too —
-          // it's what lets the UI attribute a skip tally to the right folder group.
-          status.currentFolder = file.site
+          // SSE stream (and the UI that reacted to every message). The skip still counts
+          // toward this folder's tally, just not as its own event.
+          pendingSkipCount++
           status.filesSkipped++
           status.filesDone++
           emitProgress()
           return
         }
 
-        status.currentFolder = file.site
         status.currentFile = file.absPath
         status.currentFileBytesTotal = file.size
         status.currentFileBytesDone = plan.startOffset
@@ -303,10 +348,12 @@ async function doRunIngest(rootsOverride: string[] | undefined, opts: RunIngestO
 
         await conn.run(`UPDATE ingest_files SET status = 'running' WHERE file_id = $fileId`, { fileId: plan.fileId })
 
+        let failed = false
         try {
           const outcome = await ingestFile(conn, file, serverId, plan.fileId, plan.startOffset, spec)
           if (outcome === 'stopped') stopped = true
         } catch (err: any) {
+          failed = true
           const message = err?.message ?? String(err)
           await updateFileProgress(conn, plan.fileId, {
             byteOffset: plan.startOffset,
@@ -318,6 +365,7 @@ async function doRunIngest(rootsOverride: string[] | undefined, opts: RunIngestO
           if (status.errors.length < MAX_ERRORS) status.errors.push(`${file.absPath}: ${message}`)
         }
 
+        pendingFiles.push({ file: `${file.env}/${file.ip}/${file.filename}`, ok: !failed })
         status.filesDone++
         status.currentFile = null
         emitProgress()
@@ -330,6 +378,7 @@ async function doRunIngest(rootsOverride: string[] | undefined, opts: RunIngestO
       if (stopped) break
     }
   } finally {
+    commitFolder()
     status.running = false
     status.stopRequested = false
     status.finishedAt = new Date().toISOString()

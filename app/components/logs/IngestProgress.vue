@@ -8,116 +8,41 @@ function shortName(path: string) {
   return path.split('/').slice(-3).join('/')
 }
 
-type ConsoleEntry =
-  | { kind: 'folder'; folder: string }
-  | { kind: 'folder-skipped'; folder: string; count: number }
-  | { kind: 'skip-tally'; count: number }
-  | { kind: 'file'; file: string; ok: boolean }
-
-const consoleLines = ref<ConsoleEntry[]>([])
 const consoleEl = ref<HTMLElement | null>(null)
-
-// A folder (log-ingress/<site>) is buffered here — not committed to consoleLines — until it
-// closes (the next folder starts, or the run ends). That's what lets a folder that turned out
-// to be entirely unchanged collapse to one "<folder> skipped" line instead of one line per file,
-// while a folder with real activity still expands into its header + per-file lines.
-let pendingFolder: string | null = null
-let pendingSkipCount = 0
-let pendingFiles: { file: string; ok: boolean }[] = []
-
-let lastStartedAt: string | null = null
-let lastFilesSkipped = 0
-let lastCurrentFile: string | null = null
-
-// Synced from the pending* buffer at most once per animation frame, so the live preview
-// updates smoothly without a DOM write per SSE message.
-const visiblePendingSkipped = ref(0)
-const visiblePendingFolder = ref<string | null>(null)
-
 let scrollFrame: number | null = null
 
-function pushEntry(entry: ConsoleEntry) {
-  consoleLines.value.push(entry)
-}
-
-function commitFolder() {
-  if (!pendingFolder) return
-  if (pendingFiles.length === 0) {
-    if (pendingSkipCount > 0) {
-      pushEntry({ kind: 'folder-skipped', folder: pendingFolder, count: pendingSkipCount })
-    }
-  } else {
-    pushEntry({ kind: 'folder', folder: pendingFolder })
-    if (pendingSkipCount > 0) pushEntry({ kind: 'skip-tally', count: pendingSkipCount })
-    for (const file of pendingFiles) pushEntry({ kind: 'file', ...file })
-  }
-  pendingFolder = null
-  pendingSkipCount = 0
-  pendingFiles = []
-}
-
-// Coalesces however many watcher callbacks fired since the last paint into a single DOM
-// write, so a burst of SSE messages costs at most one reflow per frame, not one per message.
-function scheduleFrame() {
+// Coalesces however many status updates land between paints into a single DOM write, so a
+// burst of SSE messages costs at most one reflow per frame, not one per message.
+function scheduleScroll() {
   if (scrollFrame !== null) return
   scrollFrame = requestAnimationFrame(() => {
     scrollFrame = null
-    visiblePendingSkipped.value = pendingSkipCount
-    visiblePendingFolder.value = pendingFolder
     if (consoleEl.value) consoleEl.value.scrollTop = consoleEl.value.scrollHeight
   })
 }
 
-function resetConsole() {
-  consoleLines.value = []
-  pendingFolder = null
-  pendingSkipCount = 0
-  pendingFiles = []
-  visiblePendingSkipped.value = 0
-  visiblePendingFolder.value = null
-  lastFilesSkipped = props.status.filesSkipped
-  lastCurrentFile = props.status.currentFile
-}
-
-onMounted(resetConsole)
-
-// A single watcher on the whole status object, not one per field: a folder change and a skip
-// (or a file completing) can land in the very same SSE message, and processing them in a fixed
-// order here — instead of via separately-ordered watchers — is what keeps a skip correctly
-// attributed to the folder it actually belongs to.
-watch(
-  () => props.status,
-  (next) => {
-    if (next.startedAt !== lastStartedAt) {
-      lastStartedAt = next.startedAt
-      resetConsole()
-    }
-
-    if (next.currentFolder && next.currentFolder !== pendingFolder) {
-      commitFolder()
-      pendingFolder = next.currentFolder
-    }
-
-    const skipDelta = next.filesSkipped - lastFilesSkipped
-    lastFilesSkipped = next.filesSkipped
-    if (skipDelta > 0) pendingSkipCount += skipDelta
-
-    if (lastCurrentFile && lastCurrentFile !== next.currentFile) {
-      const failed = next.errors.some((err) => err.startsWith(`${lastCurrentFile}:`))
-      pendingFiles.push({ file: shortName(lastCurrentFile), ok: !failed })
-    }
-    lastCurrentFile = next.currentFile
-
-    if (next.finishedAt) commitFolder()
-
-    scheduleFrame()
-  },
-  { deep: false },
-)
+watch(() => props.status.log.length, scheduleScroll)
+watch(() => props.status.currentFile, scheduleScroll)
+watch(() => props.status.filesSkipped, scheduleScroll)
+onMounted(scheduleScroll)
+onUnmounted(() => {
+  if (scrollFrame !== null) cancelAnimationFrame(scrollFrame)
+})
 
 const currentFileName = computed(
   () => (props.status.currentFile ? shortName(props.status.currentFile) : null),
 )
+
+// The current folder's skip streak isn't committed to status.log until it closes (the next
+// folder starts, or the run ends) — derive the live "still going" count as filesSkipped minus
+// whatever's already been committed, so there's still a live indicator while it's building up.
+const livePendingSkipped = computed(() => {
+  const committed = props.status.log.reduce(
+    (sum, entry) => (entry.kind === 'folder-skipped' || entry.kind === 'skip-tally' ? sum + entry.count : sum),
+    0,
+  )
+  return props.status.filesSkipped - committed
+})
 
 // Ticks once a second purely to keep the ETA live between SSE updates.
 const now = ref(Date.now())
@@ -129,7 +54,6 @@ onMounted(() => {
 })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
-  if (scrollFrame !== null) cancelAnimationFrame(scrollFrame)
 })
 
 function formatDuration(ms: number) {
@@ -203,7 +127,7 @@ const ranForLabel = computed(() => {
       class="max-h-[13rem] overflow-y-auto rounded-md bg-sunken px-2 py-1.5 font-mono text-xs leading-4"
     >
       <p
-        v-for="(entry, i) in consoleLines"
+        v-for="(entry, i) in status.log"
         :key="i"
         class="break-all"
         :class="entry.kind === 'file' || entry.kind === 'skip-tally' ? 'pl-3 text-tertiary' : 'text-secondary'"
@@ -224,8 +148,8 @@ const ranForLabel = computed(() => {
       <p v-if="currentFileName" class="break-all text-secondary">
         <span class="text-accent">▸</span> {{ currentFileName }}…
       </p>
-      <p v-else-if="visiblePendingSkipped > 0" class="break-all text-secondary">
-        <span class="text-tertiary">⤳</span> {{ visiblePendingFolder }} — {{ visiblePendingSkipped }} unchanged…
+      <p v-else-if="livePendingSkipped > 0" class="break-all text-secondary">
+        <span class="text-tertiary">⤳</span> {{ status.currentFolder }} — {{ livePendingSkipped }} unchanged…
       </p>
     </div>
   </div>

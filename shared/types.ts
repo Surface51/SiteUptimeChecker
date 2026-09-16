@@ -292,6 +292,13 @@ export interface LighthouseJob {
   error: string | null
 }
 
+/** One line of the ingest run's file-by-file log, grouped by folder — see `IngestStatus.log`. */
+export type IngestLogEntry =
+  | { kind: 'folder'; folder: string }
+  | { kind: 'folder-skipped'; folder: string; count: number }
+  | { kind: 'skip-tally'; count: number }
+  | { kind: 'file'; file: string; ok: boolean }
+
 /** Progress of the one-at-a-time log ingest run. A single global object, not per folder:
  * ingestion is serialized, so at most one run exists. Shared by the server, the SSE stream
  * (`/api/logs/ingest/events`) and the CLI's heartbeat relay. */
@@ -315,6 +322,10 @@ export interface IngestStatus {
   currentFileBytesTotal: number
   currentFileBytesDone: number
   errors: string[]
+  /** File-by-file log, grouped by folder, committed as each folder finishes. Persists on the
+   * server across the run so a page refresh (or a fresh connection) sees the full history, not
+   * just the run's aggregate counts. */
+  log: IngestLogEntry[]
 }
 
 /** Monthly SLA / error-budget figures for one site — see server/utils/db.ts getSlaReport. */

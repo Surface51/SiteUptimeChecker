@@ -66,6 +66,7 @@ const { data, pending, refresh } = await useFetch<LogStatusResponse>('/api/logs/
       currentFileBytesTotal: 0,
       currentFileBytesDone: 0,
       errors: [],
+      log: [],
     },
     logStoreOffline: false,
     generatedAt: '',

@@ -141,6 +141,9 @@ export class Progress {
       currentFileBytesTotal: running?.weight ?? 0,
       currentFileBytesDone: running?.bytesRead ?? 0,
       errors: all.filter((f) => f.status === 'error').map((f) => `${f.label}: ${f.message}`),
+      // The CLI's own TTY/line progress output is this run's log — it doesn't build the
+      // web UI's folder-grouped one too.
+      log: [],
     }
   }
 }
