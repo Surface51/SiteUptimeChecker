@@ -116,6 +116,17 @@ untouched — `logs:sync` never writes there.
 
 Log out/in once after the `usermod` for the new group membership to take effect.
 
+Same reasoning applies to `.cli-output/` (the `logs:sync`/`logs:ingest` CLI bundles,
+built outside `.output/` so `nuxt build` — which wipes `.output/` wholesale — never
+fights over ownership with the hourly sync build). `/opt/siteuptime` itself is
+`750 uptime:uptime`, so `jack` can't `mkdir` a new top-level directory there; pre-create
+it the same way:
+
+```bash
+sudo -u uptime mkdir -p /opt/siteuptime/.cli-output
+sudo chmod 2775 /opt/siteuptime/.cli-output
+```
+
 ### 3.3 Stop the machine from sleeping
 
 A workstation will suspend on idle (and Ubuntu even suspends at the GDM screen). Kill it:
