@@ -7,20 +7,30 @@ function shortName(path: string) {
   return path.split('/').slice(-3).join('/')
 }
 
+type ConsoleState = 'done' | 'skipped' | 'error'
+
 interface ConsoleEntry {
   file: string
-  ok: boolean
+  state: ConsoleState
 }
 
 // Filled from currentFile transitions rather than per-checkpoint byte progress, so it grows
 // one line per file instead of jittering as a single file's bytes-done ticks up.
 const consoleLines = ref<ConsoleEntry[]>([])
 const consoleEl = ref<HTMLElement | null>(null)
+let lastFilesSkipped = 0
+
+function scrollToBottom() {
+  nextTick(() => {
+    if (consoleEl.value) consoleEl.value.scrollTop = consoleEl.value.scrollHeight
+  })
+}
 
 watch(
   () => props.status.startedAt,
   () => {
     consoleLines.value = []
+    lastFilesSkipped = 0
   },
 )
 
@@ -28,12 +38,15 @@ watch(
   () => props.status.currentFile,
   (next, prev) => {
     if (prev && prev !== next) {
+      const skipped = props.status.filesSkipped > lastFilesSkipped
+      lastFilesSkipped = props.status.filesSkipped
       const failed = props.status.errors.some((err) => err.startsWith(`${prev}:`))
-      consoleLines.value.push({ file: shortName(prev), ok: !failed })
-      nextTick(() => {
-        if (consoleEl.value) consoleEl.value.scrollTop = consoleEl.value.scrollHeight
-      })
+      const state: ConsoleState = failed ? 'error' : skipped ? 'skipped' : 'done'
+      consoleLines.value.push({ file: shortName(prev), state })
     }
+    // Scroll on every transition, not just completions — a new file starting also grows the
+    // box by re-showing the "current" row, and that row was the one going stale before.
+    scrollToBottom()
   },
 )
 
@@ -48,6 +61,7 @@ onMounted(() => {
   timer = setInterval(() => {
     now.value = Date.now()
   }, 1000)
+  scrollToBottom()
 })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
@@ -96,8 +110,11 @@ const etaLabel = computed(() => {
       class="flex max-h-[6.75rem] flex-col overflow-y-auto rounded-md bg-sunken px-2 py-1.5 font-mono text-xs leading-5"
     >
       <p v-for="(entry, i) in consoleLines" :key="i" class="truncate text-tertiary">
-        <span :class="entry.ok ? 'text-tertiary' : 'text-down'">{{ entry.ok ? '✓' : '✗' }}</span>
+        <span :class="entry.state === 'error' ? 'text-down' : 'text-tertiary'">{{
+          entry.state === 'error' ? '✗' : entry.state === 'skipped' ? '⤳' : '✓'
+        }}</span>
         {{ entry.file }}
+        <span v-if="entry.state === 'skipped'" class="text-tertiary/70">· unchanged</span>
       </p>
       <p v-if="currentFileName" class="truncate text-secondary">
         <span class="text-accent">▸</span> {{ currentFileName }}…

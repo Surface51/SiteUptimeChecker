@@ -282,8 +282,16 @@ async function doRunIngest(rootsOverride: string[] | undefined, opts: RunIngestO
 
         const spec = PARSER_REGISTRY[file.classified.logType]
         if (!spec || !plan.needsIngest) {
+          // Touch currentFile even for a skip so the UI's file-by-file log has something to
+          // show on runs where most/all files are already ingested, not just real parses.
+          status.currentFile = file.absPath
+          status.currentFileBytesTotal = file.size
+          status.currentFileBytesDone = file.size
+          emitProgress()
+
           status.filesSkipped++
           status.filesDone++
+          status.currentFile = null
           emitProgress()
           return
         }

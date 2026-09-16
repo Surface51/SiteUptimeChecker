@@ -32,3 +32,6 @@ node_modules
 /log-sync.config.json
 backups/
 plans/
+
+# Host-specific deploy script — see HOSTING-WORKSTATION.md 8.1
+/deploy.sh
