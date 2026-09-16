@@ -156,7 +156,7 @@ const etaLabel = computed(() => {
     </div>
     <div
       ref="consoleEl"
-      class="flex max-h-[6.75rem] flex-col overflow-y-auto rounded-md bg-sunken px-2 py-1.5 font-mono text-xs leading-5"
+      class="flex max-h-[13.5rem] flex-col overflow-y-auto rounded-md bg-sunken px-2 py-1.5 font-mono text-xs leading-10"
     >
       <p v-for="(entry, i) in consoleLines" :key="i" class="truncate text-tertiary">
         <template v-if="entry.kind === 'file'">
