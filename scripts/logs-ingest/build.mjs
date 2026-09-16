@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const outdir = join(here, '../../.output/logs-ingest')
+// Deliberately outside .output — see the comment in scripts/logs-sync/build.mjs.
+const outdir = join(here, '../../.cli-output/logs-ingest')
 
 await build({
   entryPoints: [join(here, 'cli.ts'), join(here, 'worker.ts')],

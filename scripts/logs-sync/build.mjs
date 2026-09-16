@@ -8,7 +8,10 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const outdir = join(here, '../../.output/logs-sync')
+// Deliberately outside .output: `nuxt build` wipes that whole directory, and this build runs
+// on its own hourly timer as a different system user than the app build — sharing .output
+// left whichever ran last owning files the other user's build couldn't then unlink.
+const outdir = join(here, '../../.cli-output/logs-sync')
 
 await build({
   entryPoints: [join(here, 'cli.ts')],

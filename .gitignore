@@ -6,6 +6,10 @@
 .cache
 dist
 
+# logs:sync / logs:ingest CLI bundles — kept out of .output so `nuxt build` (uptime) and the
+# hourly logs:sync timer (jack) never fight over ownership of the same directory tree
+.cli-output
+
 # Node dependencies
 node_modules
 

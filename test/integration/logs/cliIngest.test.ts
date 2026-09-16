@@ -83,7 +83,7 @@ describe('logs:ingest CLI', () => {
 
     // Parallel run into a fresh data dir via the built CLI.
     const cliDataDir = mkdtempSync(join(tmpdir(), 'uptime-cli-data-'))
-    execFileSync('node', ['.output/logs-ingest/cli.js', '--no-server', '--no-progress', '--jobs', '2'], {
+    execFileSync('node', ['.cli-output/logs-ingest/cli.js', '--no-server', '--no-progress', '--jobs', '2'], {
       cwd: REPO,
       stdio: 'ignore',
       env: { ...process.env, UPTIME_DATA_DIR: cliDataDir, UPTIME_LOG_INGRESS_DIR: ingressRoot },

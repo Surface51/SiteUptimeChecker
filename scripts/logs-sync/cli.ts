@@ -147,7 +147,7 @@ async function main(): Promise<number> {
     const repo = process.cwd()
     const build = spawnSync('node', [join(repo, 'scripts/logs-ingest/build.mjs')], { stdio: 'inherit' })
     const run = build.status === 0
-      ? spawnSync('node', [join(repo, '.output/logs-ingest/cli.js'), ...(opts.progress ? [] : ['--no-progress'])], { stdio: 'inherit' })
+      ? spawnSync('node', [join(repo, '.cli-output/logs-ingest/cli.js'), ...(opts.progress ? [] : ['--no-progress'])], { stdio: 'inherit' })
       : build
     if (run.status && run.status !== 0 && exitCode === 0) exitCode = run.status
   }
