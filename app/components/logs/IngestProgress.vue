@@ -14,10 +14,6 @@ type ConsoleEntry =
   | { kind: 'skip-tally'; count: number }
   | { kind: 'file'; file: string; ok: boolean }
 
-// Bounds DOM/render cost to a fixed small size no matter how long a run is — a run can touch
-// thousands of files, and an unbounded v-for over all of them is its own perf problem.
-const MAX_CONSOLE_LINES = 8
-
 const consoleLines = ref<ConsoleEntry[]>([])
 const consoleEl = ref<HTMLElement | null>(null)
 
@@ -42,9 +38,6 @@ let scrollFrame: number | null = null
 
 function pushEntry(entry: ConsoleEntry) {
   consoleLines.value.push(entry)
-  if (consoleLines.value.length > MAX_CONSOLE_LINES) {
-    consoleLines.value.splice(0, consoleLines.value.length - MAX_CONSOLE_LINES)
-  }
 }
 
 function commitFolder() {
@@ -212,7 +205,7 @@ const ranForLabel = computed(() => {
       <p
         v-for="(entry, i) in consoleLines"
         :key="i"
-        class="truncate"
+        class="break-all"
         :class="entry.kind === 'file' || entry.kind === 'skip-tally' ? 'pl-3 text-tertiary' : 'text-secondary'"
       >
         <template v-if="entry.kind === 'folder'">{{ entry.folder }}</template>
@@ -228,10 +221,10 @@ const ranForLabel = computed(() => {
           {{ entry.file }}
         </template>
       </p>
-      <p v-if="currentFileName" class="truncate text-secondary">
+      <p v-if="currentFileName" class="break-all text-secondary">
         <span class="text-accent">▸</span> {{ currentFileName }}…
       </p>
-      <p v-else-if="visiblePendingSkipped > 0" class="truncate text-secondary">
+      <p v-else-if="visiblePendingSkipped > 0" class="break-all text-secondary">
         <span class="text-tertiary">⤳</span> {{ visiblePendingFolder }} — {{ visiblePendingSkipped }} unchanged…
       </p>
     </div>
