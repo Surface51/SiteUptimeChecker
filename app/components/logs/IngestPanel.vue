@@ -9,6 +9,10 @@ const finishedLabel = computed(() => {
   const when = new Date(status.value.finishedAt)
   return Number.isNaN(when.getTime()) ? null : when.toLocaleString()
 })
+
+// Keeps the progress view (and its file console) on screen after a run finishes instead of
+// collapsing straight to the one-line summary — it only resets once the next run starts.
+const hasRun = computed(() => status.value.running || status.value.startedAt !== null)
 </script>
 
 <template>
@@ -23,11 +27,14 @@ const finishedLabel = computed(() => {
         </template>
       </UiSectionHeading>
 
-      <LogsIngestProgress v-if="status.running" :status="status" :progress="progress" />
+      <LogsIngestProgress v-if="hasRun" :status="status" :progress="progress" />
+      <div v-else class="text-sm text-secondary">No run yet this session.</div>
 
-      <div v-else class="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm text-secondary">
-        <span v-if="finishedLabel">Last run {{ finishedLabel }}</span>
-        <span v-else>No run yet this session.</span>
+      <div
+        v-if="!status.running && finishedLabel"
+        class="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm text-secondary"
+      >
+        <span>Last run {{ finishedLabel }}</span>
         <span v-if="status.filesTotal">
           {{ status.filesTotal }} files · {{ status.filesSkipped }} unchanged
         </span>
