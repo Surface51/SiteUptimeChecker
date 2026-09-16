@@ -308,6 +308,9 @@ export interface IngestStatus {
   filesTotal: number
   filesDone: number
   filesSkipped: number
+  /** The site/log-folder (`log-ingress/<currentFolder>/...`) the current or most recently
+   * touched file belongs to — lets the UI group its file-by-file log by folder. */
+  currentFolder: string | null
   currentFile: string | null
   currentFileBytesTotal: number
   currentFileBytesDone: number

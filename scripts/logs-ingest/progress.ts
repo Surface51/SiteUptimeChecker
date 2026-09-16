@@ -136,6 +136,7 @@ export class Progress {
       filesTotal: all.length,
       filesDone: done.length,
       filesSkipped: 0,
+      currentFolder: running?.label.split('/')[0] ?? null,
       currentFile: running?.label ?? null,
       currentFileBytesTotal: running?.weight ?? 0,
       currentFileBytesDone: running?.bytesRead ?? 0,

@@ -31,6 +31,7 @@ function emptyStatus(): IngestStatus {
     filesTotal: 0,
     filesDone: 0,
     filesSkipped: 0,
+    currentFolder: null,
     currentFile: null,
     currentFileBytesTotal: 0,
     currentFileBytesDone: 0,
@@ -284,14 +285,17 @@ async function doRunIngest(rootsOverride: string[] | undefined, opts: RunIngestO
         if (!spec || !plan.needsIngest) {
           // Deliberately doesn't touch currentFile: a re-run can skip thousands of unchanged
           // files in seconds, and giving each one its own currentFile transition flooded the
-          // SSE stream (and the UI that reacted to every message). The UI derives a single
-          // "N unchanged" summary from filesSkipped instead of per-file events.
+          // SSE stream (and the UI that reacted to every message). currentFolder only changes
+          // once per folder rather than once per file, so it's cheap to set on every skip too —
+          // it's what lets the UI attribute a skip tally to the right folder group.
+          status.currentFolder = file.site
           status.filesSkipped++
           status.filesDone++
           emitProgress()
           return
         }
 
+        status.currentFolder = file.site
         status.currentFile = file.absPath
         status.currentFileBytesTotal = file.size
         status.currentFileBytesDone = plan.startOffset

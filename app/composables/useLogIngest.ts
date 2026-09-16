@@ -12,6 +12,7 @@ const EMPTY: IngestStatus = {
   filesTotal: 0,
   filesDone: 0,
   filesSkipped: 0,
+  currentFolder: null,
   currentFile: null,
   currentFileBytesTotal: 0,
   currentFileBytesDone: 0,

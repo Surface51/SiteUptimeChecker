@@ -9,8 +9,10 @@ function shortName(path: string) {
 }
 
 type ConsoleEntry =
+  | { kind: 'folder'; folder: string }
+  | { kind: 'folder-skipped'; folder: string; count: number }
+  | { kind: 'skip-tally'; count: number }
   | { kind: 'file'; file: string; ok: boolean }
-  | { kind: 'skipped'; count: number }
 
 // Bounds DOM/render cost to a fixed small size no matter how long a run is — a run can touch
 // thousands of files, and an unbounded v-for over all of them is its own perf problem.
@@ -19,14 +21,22 @@ const MAX_CONSOLE_LINES = 8
 const consoleLines = ref<ConsoleEntry[]>([])
 const consoleEl = ref<HTMLElement | null>(null)
 
-// Unchanged files can fly by faster than one SSE message per file is worth reacting to
-// individually (a re-run can skip thousands in seconds) — tally them and emit one rolling
-// "N unchanged" line instead of pushing a row per file.
-let pendingSkipped = 0
+// A folder (log-ingress/<site>) is buffered here — not committed to consoleLines — until it
+// closes (the next folder starts, or the run ends). That's what lets a folder that turned out
+// to be entirely unchanged collapse to one "<folder> skipped" line instead of one line per file,
+// while a folder with real activity still expands into its header + per-file lines.
+let pendingFolder: string | null = null
+let pendingSkipCount = 0
+let pendingFiles: { file: string; ok: boolean }[] = []
+
+let lastStartedAt: string | null = null
 let lastFilesSkipped = 0
-// Synced from pendingSkipped at most once per animation frame, so the live "N unchanged…"
-// preview updates smoothly without a DOM write per SSE message.
+let lastCurrentFile: string | null = null
+
+// Synced from the pending* buffer at most once per animation frame, so the live preview
+// updates smoothly without a DOM write per SSE message.
 const visiblePendingSkipped = ref(0)
+const visiblePendingFolder = ref<string | null>(null)
 
 let scrollFrame: number | null = null
 
@@ -37,11 +47,20 @@ function pushEntry(entry: ConsoleEntry) {
   }
 }
 
-function flushSkipped() {
-  if (pendingSkipped > 0) {
-    pushEntry({ kind: 'skipped', count: pendingSkipped })
-    pendingSkipped = 0
+function commitFolder() {
+  if (!pendingFolder) return
+  if (pendingFiles.length === 0) {
+    if (pendingSkipCount > 0) {
+      pushEntry({ kind: 'folder-skipped', folder: pendingFolder, count: pendingSkipCount })
+    }
+  } else {
+    pushEntry({ kind: 'folder', folder: pendingFolder })
+    if (pendingSkipCount > 0) pushEntry({ kind: 'skip-tally', count: pendingSkipCount })
+    for (const file of pendingFiles) pushEntry({ kind: 'file', ...file })
   }
+  pendingFolder = null
+  pendingSkipCount = 0
+  pendingFiles = []
 }
 
 // Coalesces however many watcher callbacks fired since the last paint into a single DOM
@@ -50,54 +69,57 @@ function scheduleFrame() {
   if (scrollFrame !== null) return
   scrollFrame = requestAnimationFrame(() => {
     scrollFrame = null
-    visiblePendingSkipped.value = pendingSkipped
+    visiblePendingSkipped.value = pendingSkipCount
+    visiblePendingFolder.value = pendingFolder
     if (consoleEl.value) consoleEl.value.scrollTop = consoleEl.value.scrollHeight
   })
 }
 
 function resetConsole() {
   consoleLines.value = []
-  pendingSkipped = 0
+  pendingFolder = null
+  pendingSkipCount = 0
+  pendingFiles = []
   visiblePendingSkipped.value = 0
+  visiblePendingFolder.value = null
   lastFilesSkipped = props.status.filesSkipped
+  lastCurrentFile = props.status.currentFile
 }
 
 onMounted(resetConsole)
 
-watch(() => props.status.startedAt, resetConsole)
-
+// A single watcher on the whole status object, not one per field: a folder change and a skip
+// (or a file completing) can land in the very same SSE message, and processing them in a fixed
+// order here — instead of via separately-ordered watchers — is what keeps a skip correctly
+// attributed to the folder it actually belongs to.
 watch(
-  () => props.status.filesSkipped,
+  () => props.status,
   (next) => {
-    const delta = next - lastFilesSkipped
-    lastFilesSkipped = next
-    if (delta > 0) {
-      pendingSkipped += delta
-      scheduleFrame()
+    if (next.startedAt !== lastStartedAt) {
+      lastStartedAt = next.startedAt
+      resetConsole()
     }
-  },
-)
 
-watch(
-  () => props.status.currentFile,
-  (next, prev) => {
-    // A real file starting ends any skip streak in progress — commit it as one line.
-    if (next) flushSkipped()
-    if (prev && prev !== next) {
-      const failed = props.status.errors.some((err) => err.startsWith(`${prev}:`))
-      pushEntry({ kind: 'file', file: shortName(prev), ok: !failed })
+    if (next.currentFolder && next.currentFolder !== pendingFolder) {
+      commitFolder()
+      pendingFolder = next.currentFolder
     }
+
+    const skipDelta = next.filesSkipped - lastFilesSkipped
+    lastFilesSkipped = next.filesSkipped
+    if (skipDelta > 0) pendingSkipCount += skipDelta
+
+    if (lastCurrentFile && lastCurrentFile !== next.currentFile) {
+      const failed = next.errors.some((err) => err.startsWith(`${lastCurrentFile}:`))
+      pendingFiles.push({ file: shortName(lastCurrentFile), ok: !failed })
+    }
+    lastCurrentFile = next.currentFile
+
+    if (next.finishedAt) commitFolder()
+
     scheduleFrame()
   },
-)
-
-watch(
-  () => props.status.finishedAt,
-  (next) => {
-    if (!next) return
-    flushSkipped()
-    scheduleFrame()
-  },
+  { deep: false },
 )
 
 const currentFileName = computed(
@@ -187,21 +209,30 @@ const ranForLabel = computed(() => {
       ref="consoleEl"
       class="max-h-[13rem] overflow-y-auto rounded-md bg-sunken px-2 py-1.5 font-mono text-xs leading-4"
     >
-      <p v-for="(entry, i) in consoleLines" :key="i" class="truncate text-tertiary">
-        <template v-if="entry.kind === 'file'">
-          <span :class="entry.ok ? 'text-tertiary' : 'text-down'">{{ entry.ok ? '✓' : '✗' }}</span>
-          {{ entry.file }}
+      <p
+        v-for="(entry, i) in consoleLines"
+        :key="i"
+        class="truncate"
+        :class="entry.kind === 'file' || entry.kind === 'skip-tally' ? 'pl-3 text-tertiary' : 'text-secondary'"
+      >
+        <template v-if="entry.kind === 'folder'">{{ entry.folder }}</template>
+        <template v-else-if="entry.kind === 'folder-skipped'">
+          <span class="text-tertiary">⤳</span> {{ entry.folder }} skipped
+          <span class="text-tertiary/70">({{ entry.count }} {{ entry.count === 1 ? 'file' : 'files' }})</span>
+        </template>
+        <template v-else-if="entry.kind === 'skip-tally'">
+          <span class="text-tertiary">⤳</span> {{ entry.count }} {{ entry.count === 1 ? 'file' : 'files' }} skipped
         </template>
         <template v-else>
-          <span class="text-tertiary">⤳</span>
-          {{ entry.count }} unchanged
+          <span :class="entry.ok ? 'text-tertiary' : 'text-down'">{{ entry.ok ? '✓' : '✗' }}</span>
+          {{ entry.file }}
         </template>
       </p>
       <p v-if="currentFileName" class="truncate text-secondary">
         <span class="text-accent">▸</span> {{ currentFileName }}…
       </p>
       <p v-else-if="visiblePendingSkipped > 0" class="truncate text-secondary">
-        <span class="text-tertiary">⤳</span> {{ visiblePendingSkipped }} unchanged…
+        <span class="text-tertiary">⤳</span> {{ visiblePendingFolder }} — {{ visiblePendingSkipped }} unchanged…
       </p>
     </div>
   </div>
