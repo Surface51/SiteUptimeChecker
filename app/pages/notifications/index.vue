@@ -94,13 +94,17 @@ const { data: countData, refresh: refreshCount } = useFetch<{ count: number }>('
 })
 
 // Accumulates pages as "Load more" advances the offset, resetting whenever the query itself
-// (not just the offset) changes underneath it.
+// (not just the offset) changes underneath it. `immediate: true` matters here: useFetch's first
+// load (whether resolved during SSR or on mount) sets `page` without ever firing a plain watch —
+// that only fires on a later *change* — so without it the list stayed empty until some other
+// fetch (e.g. toggling the status filter) actually changed `page` for the first time.
 const rows = ref<NotificationRow[]>([])
 watch(
   page,
   (value) => {
     rows.value = offset.value === 0 ? (value ?? []) : [...rows.value, ...(value ?? [])]
   },
+  { immediate: true },
 )
 watch(listQuery, (next, prev) => {
   if (next.offset === prev.offset) rows.value = []
