@@ -2,12 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   formatAbsoluteTime,
   formatRelativeTime,
+  notificationHref,
+  notificationSeverity,
   notificationToneClass,
   notificationTypeIcon,
   notificationTypeLabel,
+  notificationTypeOptions,
   notificationTypeTone,
 } from '../../app/utils/notificationDisplay'
-import type { NotificationType } from '../../shared/types'
+import { NOTIFICATION_TYPES } from '../../shared/types'
 
 const NOW = new Date('2026-07-21T12:00:00Z')
 
@@ -60,27 +63,33 @@ describe('formatAbsoluteTime', () => {
 })
 
 describe('notification type maps', () => {
-  const types: NotificationType[] = [
-    'down',
-    'up',
-    'degraded',
-    'ssl_expiring',
-    'lighthouse_regression',
-    'domain_expiring',
-    'nameservers_changed',
-    'ssl_issuer_changed',
-    'content_changed',
-    'log_5xx_spike',
-    'log_php_fatal',
-    'log_threat_ip',
-  ]
-
-  it('has an icon, label, tone and tone-class for every NotificationType', () => {
-    for (const type of types) {
+  it('has an icon, label, tone, tone-class and severity for every NotificationType', () => {
+    for (const type of NOTIFICATION_TYPES) {
       expect(notificationTypeIcon[type]).toBeTruthy()
       expect(notificationTypeLabel[type]).toBeTruthy()
       expect(notificationTypeTone[type]).toBeTruthy()
       expect(notificationToneClass[type]).toBeTruthy()
+      expect(notificationSeverity[type]).toBeTruthy()
     }
+  })
+
+  it('notificationTypeOptions offers an "all" option plus one entry per type', () => {
+    expect(notificationTypeOptions[0]).toEqual({ label: 'All types', value: '' })
+    expect(notificationTypeOptions.slice(1).map((o) => o.value).sort()).toEqual([...NOTIFICATION_TYPES].sort())
+  })
+})
+
+describe('notificationHref', () => {
+  it('links to the incident view when the notification carries a context', () => {
+    const href = notificationHref({
+      id: 42,
+      siteId: 7,
+      context: { kind: 'threat_ip', logSlug: 'acme', ip: '1.2.3.4', hits: 10, window: { from: 'a', to: 'b' } },
+    })
+    expect(href).toBe('/notifications/42')
+  })
+
+  it('falls back to the site page when there is no context (older rows)', () => {
+    expect(notificationHref({ id: 42, siteId: 7, context: null })).toBe('/sites/7')
   })
 })

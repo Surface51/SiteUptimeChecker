@@ -16,6 +16,7 @@ import type {
   LighthouseFormFactor,
   LighthouseReport,
   MaintenanceWindowRow,
+  NotificationContext,
   NotificationRow,
   NotificationType,
   RedirectHop,
@@ -125,7 +126,8 @@ export function getDb(): Database.Database {
       type TEXT NOT NULL,
       message TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      read INTEGER NOT NULL DEFAULT 0
+      read INTEGER NOT NULL DEFAULT 0,
+      context TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
@@ -292,6 +294,7 @@ function migrate(db: Database.Database) {
   add(siteCols, 'sites', 'degraded_ms', `degraded_ms INTEGER NOT NULL DEFAULT 5000`)
   add(siteCols, 'sites', 'expected_status', `expected_status INTEGER`)
   add(notifCols, 'notifications', 'dismissed', `dismissed INTEGER NOT NULL DEFAULT 0`)
+  add(notifCols, 'notifications', 'context', `context TEXT`)
   add(siteCols, 'sites', 'log_slug', `log_slug TEXT`)
 
   // The cooldown table outgrew its log-only name once domain/cert/content alerts began using it.
@@ -1563,11 +1566,22 @@ interface NotificationDbRow {
   created_at: string
   read: number
   dismissed: number
+  context: string | null
   site_name: string | null
   site_url: string
 }
 
 function mapNotification(row: NotificationDbRow): NotificationRow {
+  let context: NotificationContext | null = null
+  if (row.context) {
+    try {
+      context = JSON.parse(row.context) as NotificationContext
+    } catch {
+      // A malformed context must never break the list — treat it like an older row that has none.
+      context = null
+    }
+  }
+
   return {
     id: row.id,
     siteId: row.site_id,
@@ -1578,13 +1592,30 @@ function mapNotification(row: NotificationDbRow): NotificationRow {
     createdAt: row.created_at,
     read: !!row.read,
     dismissed: !!row.dismissed,
+    context,
   }
 }
 
-export function insertNotification(input: { siteId: number; type: NotificationType; message: string }) {
+export function insertNotification(input: {
+  siteId: number
+  type: NotificationType
+  message: string
+  context?: NotificationContext
+}) {
   getDb()
-    .prepare('INSERT INTO notifications (site_id, type, message) VALUES (?, ?, ?)')
-    .run(input.siteId, input.type, input.message)
+    .prepare('INSERT INTO notifications (site_id, type, message, context) VALUES (?, ?, ?, ?)')
+    .run(input.siteId, input.type, input.message, input.context ? JSON.stringify(input.context) : null)
+}
+
+export function getNotification(id: number): NotificationRow | null {
+  const row = getDb()
+    .prepare(
+      `SELECT n.*, s.name AS site_name, s.url AS site_url
+       FROM notifications n JOIN sites s ON s.id = n.site_id
+       WHERE n.id = ?`,
+    )
+    .get(id) as NotificationDbRow | undefined
+  return row ? mapNotification(row) : null
 }
 
 export interface NotificationFilter {
@@ -1592,9 +1623,13 @@ export interface NotificationFilter {
   offset?: number
   siteId?: number
   type?: NotificationType
+  /** Broader than `type` — used by the list API's comma-separated `types` filter. */
+  types?: NotificationType[]
   unreadOnly?: boolean
   /** Dismissed notifications are excluded by default (the bell only wants "active" ones). */
   includeDismissed?: boolean
+  /** Case-insensitive substring match against the message. */
+  q?: string
 }
 
 function buildNotificationWhere(filter: Omit<NotificationFilter, 'limit' | 'offset'>): {
@@ -1615,8 +1650,18 @@ function buildNotificationWhere(filter: Omit<NotificationFilter, 'limit' | 'offs
     conditions.push('n.type = ?')
     params.push(filter.type)
   }
+  if (filter.types && filter.types.length > 0) {
+    conditions.push(`n.type IN (${filter.types.map(() => '?').join(',')})`)
+    params.push(...filter.types)
+  }
   if (filter.unreadOnly) {
     conditions.push('n.read = 0')
+  }
+  if (filter.q) {
+    // Escape the LIKE wildcards in the search term itself before wrapping it in our own.
+    const escaped = filter.q.replace(/[\\%_]/g, (ch) => `\\${ch}`)
+    conditions.push(`n.message LIKE ? ESCAPE '\\'`)
+    params.push(`%${escaped}%`)
   }
 
   return { clause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', params }
@@ -1647,8 +1692,16 @@ export function markNotificationRead(id: number) {
   getDb().prepare('UPDATE notifications SET read = 1 WHERE id = ?').run(id)
 }
 
+export function setNotificationRead(id: number, read: boolean) {
+  getDb().prepare('UPDATE notifications SET read = ? WHERE id = ?').run(read ? 1 : 0, id)
+}
+
 export function markAllNotificationsRead() {
   getDb().prepare('UPDATE notifications SET read = 1 WHERE read = 0').run()
+}
+
+export function dismissNotification(id: number) {
+  getDb().prepare('UPDATE notifications SET dismissed = 1 WHERE id = ?').run(id)
 }
 
 export function dismissAllNotifications(filter?: { siteId?: number }) {
@@ -1659,6 +1712,14 @@ export function dismissAllNotifications(filter?: { siteId?: number }) {
   } else {
     getDb().prepare('UPDATE notifications SET dismissed = 1 WHERE dismissed = 0').run()
   }
+}
+
+/** Un-dismisses a set of notifications — backs the "Undo" on the list page's "Clear all". */
+export function restoreNotifications(ids: number[]) {
+  if (ids.length === 0) return
+  const db = getDb()
+  const placeholders = ids.map(() => '?').join(',')
+  db.prepare(`UPDATE notifications SET dismissed = 0 WHERE id IN (${placeholders})`).run(...ids)
 }
 
 // ---------- log folder settings ----------

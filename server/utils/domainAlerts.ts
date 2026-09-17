@@ -42,6 +42,7 @@ export function runDomainAlerts(site: Site): void {
               days < 0
                 ? `${label} domain registration has EXPIRED (${whois.expiryDate}).`
                 : `${label} domain registration expires in ${days} day${days === 1 ? '' : 's'} (${whois.expiryDate}).`,
+            context: { kind: 'domain', expiryDate: whois.expiryDate, days },
           })
         }
       }
@@ -56,6 +57,7 @@ export function runDomainAlerts(site: Site): void {
           siteId: site.id,
           type: 'nameservers_changed',
           message: `${label} nameservers changed: ${b.join(', ')} → ${a.join(', ')}`,
+          context: { kind: 'domain', nsFrom: b, nsTo: a },
         })
       }
     }

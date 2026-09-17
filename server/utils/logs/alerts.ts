@@ -62,6 +62,8 @@ async function checkSite(siteId: number, slug: string, label: string): Promise<v
   const recent = scopeFor(serverIds, WINDOW_HOURS)
   const baseline = scopeFor(serverIds, WINDOW_HOURS + BASELINE_HOURS, WINDOW_HOURS)
 
+  const window = { from: recent.from.toISOString(), to: recent.to.toISOString() }
+
   // 5xx spike
   const recent5xx = await countRows(recent, 'access_log', 'ts', 'AND status >= 500')
   const baseline5xx = await countRows(baseline, 'access_log', 'ts', 'AND status >= 500')
@@ -71,6 +73,14 @@ async function checkSite(siteId: number, slug: string, label: string): Promise<v
       siteId,
       type: 'log_5xx_spike',
       message: `${label} served ${spiked.toLocaleString()} 5xx responses in the last hour (${Math.round(baseline5xx / BASELINE_HOURS)}/hr before).`,
+      context: {
+        kind: 'log_spike',
+        logSlug: slug,
+        metric: '5xx',
+        count: spiked,
+        baselinePerHour: Math.round(baseline5xx / BASELINE_HOURS),
+        window,
+      },
     })
   }
 
@@ -84,6 +94,14 @@ async function checkSite(siteId: number, slug: string, label: string): Promise<v
       siteId,
       type: 'log_php_fatal',
       message: `${label} logged ${fatalSpike.toLocaleString()} PHP fatal errors in the last hour.`,
+      context: {
+        kind: 'log_spike',
+        logSlug: slug,
+        metric: 'php_fatal',
+        count: fatalSpike,
+        baselinePerHour: Math.round(baselineFatals / BASELINE_HOURS),
+        window,
+      },
     })
   }
 
@@ -103,10 +121,12 @@ async function checkSite(siteId: number, slug: string, label: string): Promise<v
   for (const row of offenders) {
     const ip = String(row.client_ip)
     if (!claimAlert(siteId, 'log_threat_ip', ip)) continue
+    const hits = Number(row.hits)
     insertNotification({
       siteId,
       type: 'log_threat_ip',
-      message: `${ip} hit ${label} with ${Number(row.hits).toLocaleString()} not-found requests in the last hour.`,
+      message: `${ip} hit ${label} with ${hits.toLocaleString()} not-found requests in the last hour.`,
+      context: { kind: 'threat_ip', logSlug: slug, ip, hits, window },
     })
   }
 }

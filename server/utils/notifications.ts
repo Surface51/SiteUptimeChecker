@@ -13,11 +13,26 @@ export function detectAndNotify(site: Site, previous: CheckRow | null, current: 
       : current.httpStatus
         ? `HTTP ${current.httpStatus}`
         : current.error || 'unreachable'
-    insertNotification({ siteId: site.id, type: 'down', message: `${label} is down (${reason})` })
+    insertNotification({
+      siteId: site.id,
+      type: 'down',
+      message: `${label} is down (${reason})`,
+      context: { kind: 'check', httpStatus: current.httpStatus, reason },
+    })
   } else if (current.status !== 'down' && previous?.status === 'down') {
-    insertNotification({ siteId: site.id, type: 'up', message: `${label} is back up` })
+    insertNotification({
+      siteId: site.id,
+      type: 'up',
+      message: `${label} is back up`,
+      context: { kind: 'check', httpStatus: current.httpStatus, reason: null },
+    })
   } else if (current.status === 'degraded' && previous?.status === 'up') {
-    insertNotification({ siteId: site.id, type: 'degraded', message: `${label} is degraded (slow response or SSL nearing expiry)` })
+    insertNotification({
+      siteId: site.id,
+      type: 'degraded',
+      message: `${label} is degraded (slow response or SSL nearing expiry)`,
+      context: { kind: 'check', httpStatus: current.httpStatus, reason: null },
+    })
   }
 
   const prevDays = previous?.sslDaysRemaining ?? null
@@ -27,6 +42,7 @@ export function detectAndNotify(site: Site, previous: CheckRow | null, current: 
       siteId: site.id,
       type: 'ssl_expiring',
       message: `${label} SSL certificate expires in ${curDays} day${curDays === 1 ? '' : 's'}`,
+      context: { kind: 'ssl', daysRemaining: curDays },
     })
   }
 
@@ -44,6 +60,7 @@ export function detectAndNotify(site: Site, previous: CheckRow | null, current: 
       siteId: site.id,
       type: 'ssl_issuer_changed',
       message: `${label} certificate issuer changed from "${prevIssuer}" to "${curIssuer}"`,
+      context: { kind: 'ssl', issuerFrom: prevIssuer, issuerTo: curIssuer },
     })
   }
 }

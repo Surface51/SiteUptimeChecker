@@ -1,6 +1,7 @@
 import type { NotificationRow, NotificationType } from '#shared/types'
 
 const DESKTOP_PREF_KEY = 'siteUptime.desktopNotifications'
+const POLL_MS = 30_000
 
 const TOAST_TYPE: Record<NotificationType, 'success' | 'warning' | 'error'> = {
   up: 'success',
@@ -17,13 +18,23 @@ const TOAST_TYPE: Record<NotificationType, 'success' | 'warning' | 'error'> = {
   log_threat_ip: 'warning',
 }
 
+// Module-level (singleton) state for the parts that must exist exactly once no matter how many
+// components call useNotifications() — AppSidebar (which owns the bell badge for the whole app)
+// and the notifications page both do. `data`/`refresh` below stay per-invocation: Nuxt's useFetch
+// dedupes by key, so every call with this same URL already shares one underlying data ref. The
+// timer and the new-id diffing don't get that for free, though — each call used to start its own
+// setInterval and its own knownIds Set, so a fresh notification toasted once per mounted instance.
+const desktopEnabled = ref(false)
+const knownIds = new Set<number>()
+let hasSeeded = false
+let refCount = 0
+let interval: ReturnType<typeof setInterval> | undefined
+
 export function useNotifications() {
   const { data, refresh } = useFetch<NotificationRow[]>('/api/notifications', { default: () => [] })
   const { push: pushToast } = useToasts()
 
   const unreadCount = computed(() => (data.value ?? []).filter((n) => !n.read).length)
-  const desktopEnabled = ref(false)
-  const knownIds = new Set<number>()
 
   function seedKnownIds() {
     for (const n of data.value ?? []) knownIds.add(n.id)
@@ -38,7 +49,7 @@ export function useNotifications() {
       if (!knownIds.has(n.id)) {
         knownIds.add(n.id)
         // In-app toast fires regardless of desktop-notification permission.
-        pushToast(n.message, TOAST_TYPE[n.type] ?? 'info')
+        pushToast(n.message, TOAST_TYPE[n.type] ?? 'info', notificationHref(n))
         if (canDesktopNotify) {
           new Notification('Site Uptime', { body: n.message })
         }
@@ -46,17 +57,27 @@ export function useNotifications() {
     }
   }
 
-  let interval: ReturnType<typeof setInterval> | undefined
-
   onMounted(async () => {
+    refCount += 1
     desktopEnabled.value = localStorage.getItem(DESKTOP_PREF_KEY) === 'true'
+
     await refresh()
-    seedKnownIds()
-    interval = setInterval(pollAndNotify, 30_000)
+    if (!hasSeeded) {
+      hasSeeded = true
+      seedKnownIds()
+    }
+
+    if (!interval) {
+      interval = setInterval(pollAndNotify, POLL_MS)
+    }
   })
 
   onUnmounted(() => {
-    if (interval) clearInterval(interval)
+    refCount -= 1
+    if (refCount <= 0 && interval) {
+      clearInterval(interval)
+      interval = undefined
+    }
   })
 
   async function enableDesktopNotifications(): Promise<boolean> {

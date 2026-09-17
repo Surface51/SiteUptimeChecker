@@ -43,6 +43,7 @@ describe('detectAndNotify', () => {
     const notes = listNotifications({ limit: 10 })
     expect(notes).toHaveLength(1)
     expect(notes[0]).toMatchObject({ type: 'down', message: 'Site A is down (HTTP 503)' })
+    expect(notes[0]!.context).toEqual({ kind: 'check', httpStatus: 503, reason: 'HTTP 503' })
   })
 
   it('does not re-notify "down" while already down', () => {

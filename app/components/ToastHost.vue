@@ -32,7 +32,8 @@ const iconColors: Record<string, string> = {
         v-for="t in toasts"
         :key="t.id"
         class="pointer-events-auto flex w-full max-w-sm items-start gap-2.5 rounded-md border border-l-4 border-border-default bg-raised px-4 py-3 text-sm text-primary"
-        :class="typeClasses[t.type]"
+        :class="[typeClasses[t.type], t.href ? 'cursor-pointer' : '']"
+        @click="t.href && navigateTo(t.href)"
       >
         <UiIcon :name="typeIcons[t.type] ?? 'info'" :size="18" :class="iconColors[t.type]" class="shrink-0" />
         <span class="min-w-0 flex-1">{{ t.message }}</span>
@@ -40,7 +41,7 @@ const iconColors: Record<string, string> = {
           type="button"
           class="shrink-0 cursor-pointer text-tertiary transition-colors hover:text-primary"
           aria-label="Dismiss"
-          @click="dismiss(t.id)"
+          @click.stop="dismiss(t.id)"
         >
           <UiIcon name="close" :size="16" />
         </button>

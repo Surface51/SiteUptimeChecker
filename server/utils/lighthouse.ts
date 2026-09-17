@@ -219,6 +219,12 @@ function checkRegression(
       siteId: site.id,
       type: 'lighthouse_regression',
       message: `${label} Performance (${formFactor}) dropped from ${previous.performance} to ${current.performance}`,
+      context: {
+        kind: 'lighthouse',
+        formFactor,
+        previous: previous.performance,
+        current: current.performance,
+      },
     })
   }
 }

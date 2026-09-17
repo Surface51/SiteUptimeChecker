@@ -61,6 +61,7 @@ describe('runLogAlerts', () => {
     expect(first).toHaveLength(1)
     expect(first[0]!.message).toContain('Acme')
     expect(first[0]!.siteId).toBe(site.id)
+    expect(first[0]!.context).toMatchObject({ kind: 'log_spike', logSlug: SLUG, metric: '5xx', count: 60 })
 
     // A second pass over the same data must not re-notify.
     await runLogAlerts()
@@ -106,6 +107,9 @@ describe('runLogAlerts', () => {
     const threats = listNotifications({ limit: 20 }).filter((n) => n.type === 'log_threat_ip')
     expect(threats).toHaveLength(1)
     expect(threats[0]!.message).toContain('198.51.100.4')
+    expect(threats[0]!.context).toMatchObject({ kind: 'threat_ip', logSlug: SLUG, ip: '198.51.100.4', hits: 120 })
+    expect(threats[0]!.context).toHaveProperty('window.from')
+    expect(threats[0]!.context).toHaveProperty('window.to')
 
     await runLogAlerts()
     expect(listNotifications({ limit: 20 }).filter((n) => n.type === 'log_threat_ip')).toHaveLength(1)

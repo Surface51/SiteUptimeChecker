@@ -166,6 +166,7 @@ function evaluateContentWatch(site: Site, body: string, reference: string[] | nu
         siteId: site.id,
         type: 'content_changed',
         message: `${label} page content changed by ~${change.percent}% since the last snapshot.`,
+        context: { kind: 'content', percent: change.percent, bodyHash },
       })
     }
     setSiteBodyChunks(site.id, current)

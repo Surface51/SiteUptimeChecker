@@ -1,4 +1,4 @@
-import type { NotificationType } from '#shared/types'
+import { NOTIFICATION_TYPES, type NotificationRow, type NotificationType } from '#shared/types'
 
 /** Material Symbols ligature names — rendered via <UiIcon>. */
 export const notificationTypeIcon: Record<NotificationType, string> = {
@@ -62,6 +62,44 @@ export const notificationTypeLabel: Record<NotificationType, string> = {
   log_5xx_spike: 'Error spike',
   log_php_fatal: 'PHP fatals',
   log_threat_ip: 'Suspicious IP',
+}
+
+/** Options for the type filter on the notifications page — derived from the label map above so a
+ * type can't go missing from the dropdown the way the old hardcoded list did. */
+export const notificationTypeOptions: { label: string; value: NotificationType | '' }[] = [
+  { label: 'All types', value: '' },
+  ...NOTIFICATION_TYPES.map((value) => ({ label: notificationTypeLabel[value], value })),
+]
+
+/** Coarse severity, for the severity filter. Doesn't need per-type nuance the way tone/icon do. */
+export const notificationSeverity: Record<NotificationType, 'critical' | 'warning' | 'info'> = {
+  down: 'critical',
+  log_5xx_spike: 'critical',
+  log_php_fatal: 'critical',
+  up: 'info',
+  nameservers_changed: 'info',
+  ssl_issuer_changed: 'info',
+  degraded: 'warning',
+  ssl_expiring: 'warning',
+  lighthouse_regression: 'warning',
+  domain_expiring: 'warning',
+  content_changed: 'warning',
+  log_threat_ip: 'warning',
+}
+
+export const notificationSeverityLabel: Record<'critical' | 'warning' | 'info', string> = {
+  critical: 'Critical',
+  warning: 'Warning',
+  info: 'Info',
+}
+
+/**
+ * Where clicking a notification should go. A row with a stored `context` opens the incident view
+ * built for its alert kind; older rows (inserted before `context` existed) fall back to the site
+ * page, same as every notification used to behave.
+ */
+export function notificationHref(n: Pick<NotificationRow, 'id' | 'siteId' | 'context'>): string {
+  return n.context ? `/notifications/${n.id}` : `/sites/${n.siteId}`
 }
 
 export function formatRelativeTime(iso: string): string {

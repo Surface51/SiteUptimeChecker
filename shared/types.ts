@@ -244,6 +244,60 @@ export type NotificationType =
   | 'log_php_fatal'
   | 'log_threat_ip'
 
+/**
+ * Every `NotificationType`, kept in sync with the union above via `satisfies`: leaving a type out
+ * of this array is a compile error, so the notification list API (which validates its `type` query
+ * param against this array) can't silently start ignoring a new type again.
+ */
+export const NOTIFICATION_TYPES = [
+  'down',
+  'up',
+  'degraded',
+  'ssl_expiring',
+  'lighthouse_regression',
+  'domain_expiring',
+  'nameservers_changed',
+  'ssl_issuer_changed',
+  'content_changed',
+  'log_5xx_spike',
+  'log_php_fatal',
+  'log_threat_ip',
+] as const satisfies readonly NotificationType[]
+
+/** An absolute (ISO 8601) time window a notification's evidence should be read from. */
+export interface NotificationWindow {
+  from: string
+  to: string
+}
+
+/**
+ * Structured facts captured at the moment a notification fires, so the incident view can show the
+ * actual evidence instead of re-deriving it from the prose `message`. One `kind` per family of
+ * alert (see the producer noted on each): `null` on older rows inserted before this existed.
+ */
+export type NotificationContext =
+  // server/utils/logs/alerts.ts — a single address generating a burst of not-found requests.
+  | { kind: 'threat_ip'; logSlug: string; ip: string; hits: number; window: NotificationWindow }
+  // server/utils/logs/alerts.ts — a spike in 5xx responses or PHP fatals vs. the recent baseline.
+  | {
+      kind: 'log_spike'
+      logSlug: string
+      metric: '5xx' | 'php_fatal'
+      count: number
+      baselinePerHour: number
+      window: NotificationWindow
+    }
+  // server/utils/notifications.ts — an uptime-check status transition.
+  | { kind: 'check'; httpStatus: number | null; reason: string | null }
+  // server/utils/notifications.ts — SSL expiry or an issuer change.
+  | { kind: 'ssl'; daysRemaining?: number | null; issuerFrom?: string; issuerTo?: string }
+  // server/utils/domainAlerts.ts — domain/nameserver watch.
+  | { kind: 'domain'; expiryDate?: string; days?: number; nsFrom?: string[]; nsTo?: string[] }
+  // server/utils/checks/index.ts — the content-diff watch.
+  | { kind: 'content'; percent: number; bodyHash: string }
+  // server/utils/lighthouse.ts — a Performance-score regression.
+  | { kind: 'lighthouse'; formFactor: LighthouseFormFactor; previous: number; current: number }
+
 export type LighthouseFormFactor = 'mobile' | 'desktop'
 
 export interface LighthouseReport {
@@ -275,6 +329,7 @@ export interface NotificationRow {
   createdAt: string
   read: boolean
   dismissed: boolean
+  context: NotificationContext | null
 }
 
 export type LighthouseJobStatus = 'queued' | 'running' | 'done' | 'error'
