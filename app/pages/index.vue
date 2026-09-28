@@ -115,7 +115,11 @@ const sortedCardSites = computed(() => {
       <div>
         <h1 class="font-display text-4xl font-bold tracking-tight text-primary">Uptime Dashboard</h1>
         <p class="mt-1.5 text-base text-secondary">
-          Monitoring {{ sites.length }} {{ sites.length === 1 ? 'site' : 'sites' }}.
+          <template v-if="selectedTags.length">
+            Monitoring {{ filteredSites.length }} of {{ sites.length }} sites, tagged
+            {{ selectedTags.join(', ') }}.
+          </template>
+          <template v-else> Monitoring {{ sites.length }} {{ sites.length === 1 ? 'site' : 'sites' }}. </template>
         </p>
       </div>
       <div class="flex flex-wrap gap-2.5">
@@ -144,13 +148,6 @@ const sortedCardSites = computed(() => {
     </UiEmptyState>
 
     <template v-else>
-      <SummaryBar :sites="sites" />
-
-      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <FleetStatusDonut :sites="sites" />
-        <SslExpiryBar :sites="sites" />
-      </div>
-
       <div v-if="allTags.length" class="flex flex-wrap items-center gap-2">
         <span class="mr-1 text-xs tracking-wide text-tertiary uppercase">Filter</span>
         <UiChip
@@ -169,6 +166,13 @@ const sortedCardSites = computed(() => {
         >
           Clear
         </button>
+      </div>
+
+      <SummaryBar :sites="filteredSites" />
+
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <FleetStatusDonut :sites="filteredSites" />
+        <SslExpiryBar :sites="filteredSites" />
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-4">
