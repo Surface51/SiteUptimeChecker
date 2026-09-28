@@ -1002,6 +1002,29 @@ export function getIncidentMetrics(
 }
 
 /**
+ * Raw incident-recovery figures for a site over the trailing `hours` — the parts a caller needs to
+ * combine several sites into one fleet-wide, check-weighted MTTR (a mean of per-site means would
+ * over-weight low-incident sites). See `getIncidentMetrics` for the single-site average version.
+ */
+export function getIncidentSummary(
+  siteId: number,
+  hours: number,
+): { total: number; closed: number; recoverySeconds: number } {
+  const rows = getDb()
+    .prepare(
+      `SELECT started_at, ended_at FROM incidents
+       WHERE site_id = ? AND started_at >= datetime('now', ?)`,
+    )
+    .all(siteId, `-${hours} hours`) as { started_at: string; ended_at: string | null }[]
+
+  const toMsOf = (s: string) => new Date(`${s.replace(' ', 'T')}Z`).getTime()
+  const closedRows = rows.filter((r) => r.ended_at)
+  const recoverySeconds = closedRows.reduce((sum, r) => sum + (toMsOf(r.ended_at!) - toMsOf(r.started_at)), 0) / 1000
+
+  return { total: rows.length, closed: closedRows.length, recoverySeconds }
+}
+
+/**
  * Monthly SLA / error-budget figures for one site. Downtime is time-weighted from incident
  * intervals (not rollups), so it is correct even for a month whose rollups haven't run. For the
  * current month "elapsed" runs to now, so the budget reads sensibly mid-month.
@@ -1073,7 +1096,19 @@ function buildTrailing12(siteId: number, endMonth: string): { month: string; upt
   return out
 }
 
+/** Days from now until an ISO-ish date string, floored; null for an empty/unparseable input. */
+function daysUntil(dateStr: string | null): number | null {
+  if (!dateStr) return null
+  const t = Date.parse(dateStr)
+  if (Number.isNaN(t)) return null
+  return Math.floor((t - Date.now()) / 86_400_000)
+}
+
 export function buildSiteSummary(site: Site): SiteSummary {
+  const responseStats = getResponseStats(site.id, 24)
+  const incidents30d = getIncidentSummary(site.id, 24 * 30)
+  const whois = getLatestWhoisRecord(site.id)
+
   return {
     ...site,
     latestCheck: getLatestCheck(site.id),
@@ -1085,6 +1120,12 @@ export function buildSiteSummary(site: Site): SiteSummary {
     inMaintenance: isInMaintenance(site.id),
     latestPerformance: getLatestLighthouseReport(site.id, 'mobile')?.performance ?? null,
     latestPerformanceDesktop: getLatestLighthouseReport(site.id, 'desktop')?.performance ?? null,
+    avgMs24h: responseStats.avgMs,
+    p95Ms24h: responseStats.p95Ms,
+    checkCount24h: responseStats.count,
+    incidents30d,
+    domainExpiresAt: whois?.expiryDate ?? null,
+    domainDaysRemaining: daysUntil(whois?.expiryDate ?? null),
   }
 }
 

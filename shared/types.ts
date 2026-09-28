@@ -152,6 +152,18 @@ export interface SiteSummary extends Site {
   inMaintenance: boolean
   latestPerformance: number | null
   latestPerformanceDesktop: number | null
+
+  // --- Trailing-24h response stats — see server/utils/db.ts getResponseStats. ---
+  avgMs24h: number | null
+  p95Ms24h: number | null
+  checkCount24h: number
+
+  // --- Trailing-30d incident recovery — see server/utils/db.ts getIncidentSummary. ---
+  incidents30d: { total: number; closed: number; recoverySeconds: number }
+
+  // --- Domain (registrar) expiry, from the latest WHOIS snapshot. ---
+  domainExpiresAt: string | null
+  domainDaysRemaining: number | null
 }
 
 export interface HistoryPoint {
