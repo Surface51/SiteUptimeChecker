@@ -5,6 +5,8 @@ defineProps<{
   icon?: string
   /** Utility class for the value, e.g. `text-down` — defaults to primary text. */
   valueClass?: string
+  /** Optional sub-line under the label, e.g. "p95 worst 2.4s". */
+  hint?: string
 }>()
 </script>
 
@@ -18,5 +20,6 @@ defineProps<{
       {{ value }}
     </span>
     <span class="text-sm text-secondary">{{ label }}</span>
+    <span v-if="hint" class="-mt-1 text-xs text-tertiary">{{ hint }}</span>
   </div>
 </template>
