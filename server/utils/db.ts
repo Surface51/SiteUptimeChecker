@@ -26,6 +26,7 @@ import type {
   SiteSummary,
   StatusTick,
   SubdomainRow,
+  SubdomainScanState,
   SubdomainSource,
   WhoisRecord,
 } from '#shared/types'
@@ -1771,11 +1772,6 @@ export function setSubdomainIgnored(siteId: number, hostname: string, ignored: b
   getDb()
     .prepare('UPDATE site_subdomains SET ignored = ? WHERE site_id = ? AND hostname = ?')
     .run(ignored ? 1 : 0, siteId, hostname)
-}
-
-export interface SubdomainScanState {
-  scannedAt: string
-  wildcard: boolean
 }
 
 export function getSubdomainScanState(siteId: number): SubdomainScanState | null {

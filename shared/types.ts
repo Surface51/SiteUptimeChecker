@@ -84,6 +84,13 @@ export interface SubdomainRow {
   ignored: boolean
 }
 
+/** When a site's subdomains were last scanned, and whether that scan found wildcard DNS (which
+ * suppresses the wordlist source — see server/utils/subdomains.ts). */
+export interface SubdomainScanState {
+  scannedAt: string
+  wildcard: boolean
+}
+
 export type BaselineMode = 'fixed' | 'adaptive'
 
 export interface Site {

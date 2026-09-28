@@ -1,4 +1,4 @@
-import { getSite, listSubdomains } from '../../../../utils/db'
+import { getSite, getSubdomainScanState, listSubdomains } from '../../../../utils/db'
 
 export default defineEventHandler((event) => {
   const id = Number(getRouterParam(event, 'id'))
@@ -11,5 +11,5 @@ export default defineEventHandler((event) => {
     throw createError({ statusCode: 404, statusMessage: 'Site not found' })
   }
 
-  return listSubdomains(id)
+  return { subdomains: listSubdomains(id), scan: getSubdomainScanState(id) }
 })
