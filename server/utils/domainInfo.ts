@@ -1,7 +1,15 @@
 import type { Site } from '#shared/types'
-import { getLatestDnsRecordSet, getLatestWhoisRecord, insertDnsRecordSet, insertWhoisRecord, listSites } from './db'
+import {
+  getLatestDnsRecordSet,
+  getLatestWhoisRecord,
+  getSubdomainScanState,
+  insertDnsRecordSet,
+  insertWhoisRecord,
+  listSites,
+} from './db'
 import { runDomainAlerts } from './domainAlerts'
 import { runDnsRecords } from './dnsRecords'
+import { refreshSubdomains } from './subdomains'
 import { runWhois } from './whois'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -29,11 +37,18 @@ function hasDnsThisWeek(siteId: number): boolean {
   return Date.now() - checkedAt.getTime() < WEEK_MS
 }
 
+function hasSubdomainScanThisWeek(siteId: number): boolean {
+  const state = getSubdomainScanState(siteId)
+  if (!state) return false
+  const scannedAt = new Date(`${state.scannedAt.replace(' ', 'T')}Z`)
+  return Date.now() - scannedAt.getTime() < WEEK_MS
+}
+
 // Dedup concurrent refreshes of the same site (e.g. a double-clicked "Refresh now"), the same
 // way lighthouse.ts's inFlightRuns does.
 const inFlight = new Map<number, Promise<void>>()
 
-/** Runs the WHOIS + DNS lookups for a site, skipping either that already has data from this week (unless `force`). */
+/** Runs the WHOIS lookup, DNS snapshot and subdomain scan for a site, skipping any that already has data from this week (unless `force`). */
 export function refreshDomainInfo(site: Site, opts: { force?: boolean } = {}): Promise<void> {
   if (!opts.force) {
     const pending = inFlight.get(site.id)
@@ -68,6 +83,10 @@ async function runDomainInfoNow(site: Site, opts: { force?: boolean }): Promise<
     )
   }
 
+  if (opts.force || !hasSubdomainScanThisWeek(site.id)) {
+    jobs.push(refreshSubdomains(site, opts))
+  }
+
   await Promise.allSettled(jobs)
 
   // Fresh WHOIS/DNS rows are now in place — raise expiry / nameserver-change alerts off them.
@@ -77,10 +96,10 @@ async function runDomainInfoNow(site: Site, opts: { force?: boolean }): Promise<
 let dailyTimer: NodeJS.Timeout | null = null
 
 /**
- * Ticks daily (like the lighthouse scheduler) but `hasWhoisThisWeek`/`hasDnsThisWeek` skip any
- * site that already has a lookup from within the last 7 days, so work actually only happens
- * once a week per site. The daily cadence just means a restart catches up quickly instead of
- * waiting up to a week.
+ * Ticks daily (like the lighthouse scheduler) but `hasWhoisThisWeek`/`hasDnsThisWeek`/
+ * `hasSubdomainScanThisWeek` skip any site that already has data from within the last 7 days, so
+ * work actually only happens once a week per site. The daily cadence just means a restart catches
+ * up quickly instead of waiting up to a week.
  */
 export function startDomainInfoScheduler() {
   for (const site of listSites()) {

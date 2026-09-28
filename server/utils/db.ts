@@ -25,6 +25,8 @@ import type {
   SlaReport,
   SiteSummary,
   StatusTick,
+  SubdomainRow,
+  SubdomainSource,
   WhoisRecord,
 } from '#shared/types'
 
@@ -260,6 +262,43 @@ export function getDb(): Database.Database {
       max_ms REAL,
       down_seconds INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (site_id, day)
+    );
+
+    -- Discovered subdomains of a site's root domain (certificate SANs, a DNS wordlist probe,
+    -- and Certificate Transparency logs — see server/utils/subdomains.ts). One row per
+    -- (site, hostname), upserted on each scan: a status snapshot, not a time series, so
+    -- resolves/http_status/ssl_* always reflect the most recent probe.
+    CREATE TABLE IF NOT EXISTS site_subdomains (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      hostname TEXT NOT NULL,
+      sources TEXT NOT NULL,
+      first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+      checked_at TEXT,
+      resolves INTEGER NOT NULL DEFAULT 0,
+      addresses TEXT,
+      cname TEXT,
+      http_status INTEGER,
+      final_url TEXT,
+      time_total REAL,
+      ssl_valid INTEGER,
+      ssl_issuer TEXT,
+      ssl_expires_at TEXT,
+      ssl_days_remaining INTEGER,
+      error TEXT,
+      ignored INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(site_id, hostname)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_site_subdomains_site ON site_subdomains(site_id, hostname);
+
+    -- One row per site: when its subdomains were last scanned, and whether that scan found
+    -- wildcard DNS (which suppresses the wordlist source — every label would "resolve").
+    CREATE TABLE IF NOT EXISTS subdomain_scans (
+      site_id INTEGER PRIMARY KEY REFERENCES sites(id) ON DELETE CASCADE,
+      scanned_at TEXT NOT NULL DEFAULT (datetime('now')),
+      wildcard INTEGER NOT NULL DEFAULT 0
     );
   `)
 
@@ -1595,6 +1634,165 @@ export function getDnsHistory(siteId: number, days: number, limit: number): DnsR
     )
     .all(siteId, `-${days} days`, limit) as DnsRecordSetDbRow[]
   return rows.map(mapDnsRecordSet)
+}
+
+// ---------- site subdomains ----------
+
+interface SubdomainDbRow {
+  id: number
+  site_id: number
+  hostname: string
+  sources: string
+  first_seen_at: string
+  last_seen_at: string
+  checked_at: string | null
+  resolves: number
+  addresses: string | null
+  cname: string | null
+  http_status: number | null
+  final_url: string | null
+  time_total: number | null
+  ssl_valid: number | null
+  ssl_issuer: string | null
+  ssl_expires_at: string | null
+  ssl_days_remaining: number | null
+  error: string | null
+  ignored: number
+}
+
+function mapSubdomain(row: SubdomainDbRow): SubdomainRow {
+  return {
+    id: row.id,
+    siteId: row.site_id,
+    hostname: row.hostname,
+    sources: JSON.parse(row.sources) as SubdomainSource[],
+    firstSeenAt: row.first_seen_at,
+    lastSeenAt: row.last_seen_at,
+    checkedAt: row.checked_at,
+    resolves: !!row.resolves,
+    addresses: parseStringArray(row.addresses),
+    cname: row.cname,
+    httpStatus: row.http_status,
+    finalUrl: row.final_url,
+    timeTotal: row.time_total,
+    sslValid: row.ssl_valid === null ? null : !!row.ssl_valid,
+    sslIssuer: row.ssl_issuer,
+    sslExpiresAt: row.ssl_expires_at,
+    sslDaysRemaining: row.ssl_days_remaining,
+    error: row.error,
+    ignored: !!row.ignored,
+  }
+}
+
+export interface UpsertSubdomainInput {
+  siteId: number
+  hostname: string
+  sources: SubdomainSource[]
+  resolves: boolean
+  addresses: string[]
+  cname: string | null
+  httpStatus: number | null
+  finalUrl: string | null
+  timeTotal: number | null
+  sslValid: boolean | null
+  sslIssuer: string | null
+  sslExpiresAt: string | null
+  sslDaysRemaining: number | null
+  error: string | null
+}
+
+/**
+ * Records one probed hostname for a site. A status snapshot, not a time series: `first_seen_at`
+ * is preserved across scans (it's left out of the UPDATE), `last_seen_at`/`checked_at` advance,
+ * and `sources` is the union of every source that has ever surfaced this hostname (a name found
+ * via crt.sh on one scan and the wordlist on the next keeps both tags).
+ */
+export function upsertSubdomain(input: UpsertSubdomainInput): SubdomainRow {
+  const existing = getDb()
+    .prepare('SELECT sources FROM site_subdomains WHERE site_id = ? AND hostname = ?')
+    .get(input.siteId, input.hostname) as { sources: string } | undefined
+  const sources = existing
+    ? [...new Set([...(JSON.parse(existing.sources) as SubdomainSource[]), ...input.sources])]
+    : input.sources
+
+  getDb()
+    .prepare(
+      `INSERT INTO site_subdomains (
+        site_id, hostname, sources, last_seen_at, checked_at, resolves, addresses, cname,
+        http_status, final_url, time_total, ssl_valid, ssl_issuer, ssl_expires_at, ssl_days_remaining, error
+      ) VALUES (?, ?, ?, datetime('now'), datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(site_id, hostname) DO UPDATE SET
+        sources = excluded.sources,
+        last_seen_at = excluded.last_seen_at,
+        checked_at = excluded.checked_at,
+        resolves = excluded.resolves,
+        addresses = excluded.addresses,
+        cname = excluded.cname,
+        http_status = excluded.http_status,
+        final_url = excluded.final_url,
+        time_total = excluded.time_total,
+        ssl_valid = excluded.ssl_valid,
+        ssl_issuer = excluded.ssl_issuer,
+        ssl_expires_at = excluded.ssl_expires_at,
+        ssl_days_remaining = excluded.ssl_days_remaining,
+        error = excluded.error`,
+    )
+    .run(
+      input.siteId,
+      input.hostname,
+      JSON.stringify(sources),
+      input.resolves ? 1 : 0,
+      JSON.stringify(input.addresses),
+      input.cname,
+      input.httpStatus,
+      input.finalUrl,
+      input.timeTotal,
+      input.sslValid === null ? null : input.sslValid ? 1 : 0,
+      input.sslIssuer,
+      input.sslExpiresAt,
+      input.sslDaysRemaining,
+      input.error,
+    )
+
+  const row = getDb()
+    .prepare('SELECT * FROM site_subdomains WHERE site_id = ? AND hostname = ?')
+    .get(input.siteId, input.hostname) as SubdomainDbRow
+  return mapSubdomain(row)
+}
+
+export function listSubdomains(siteId: number): SubdomainRow[] {
+  const rows = getDb()
+    .prepare('SELECT * FROM site_subdomains WHERE site_id = ? ORDER BY hostname COLLATE NOCASE ASC')
+    .all(siteId) as SubdomainDbRow[]
+  return rows.map(mapSubdomain)
+}
+
+export function setSubdomainIgnored(siteId: number, hostname: string, ignored: boolean): void {
+  getDb()
+    .prepare('UPDATE site_subdomains SET ignored = ? WHERE site_id = ? AND hostname = ?')
+    .run(ignored ? 1 : 0, siteId, hostname)
+}
+
+export interface SubdomainScanState {
+  scannedAt: string
+  wildcard: boolean
+}
+
+export function getSubdomainScanState(siteId: number): SubdomainScanState | null {
+  const row = getDb().prepare('SELECT scanned_at, wildcard FROM subdomain_scans WHERE site_id = ?').get(siteId) as
+    | { scanned_at: string; wildcard: number }
+    | undefined
+  return row ? { scannedAt: row.scanned_at, wildcard: !!row.wildcard } : null
+}
+
+/** Records that a subdomain scan just ran, and whether it found wildcard DNS. */
+export function markSubdomainScan(siteId: number, wildcard: boolean): void {
+  getDb()
+    .prepare(
+      `INSERT INTO subdomain_scans (site_id, scanned_at, wildcard) VALUES (?, datetime('now'), ?)
+       ON CONFLICT(site_id) DO UPDATE SET scanned_at = excluded.scanned_at, wildcard = excluded.wildcard`,
+    )
+    .run(siteId, wildcard ? 1 : 0)
 }
 
 // ---------- notifications ----------

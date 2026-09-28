@@ -2,7 +2,7 @@ import http from 'node:http'
 import https from 'node:https'
 import type { TLSSocket } from 'node:tls'
 import type { RedirectHop } from '#shared/types'
-import type { SslInfo } from './sslCheck'
+import { parseAltNames, type SslInfo } from './sslCheck'
 
 export interface HttpCheckResult {
   finalUrl: string
@@ -62,7 +62,7 @@ const USER_AGENT =
  * overrides the same key. `X-Uptime-Monitor` is a stable token to match on when allow-listing,
  * so a firewall rule never has to parse the User-Agent.
  */
-const MONITOR_HEADERS: Record<string, string> = {
+export const MONITOR_HEADERS: Record<string, string> = {
   'User-Agent': USER_AGENT,
   'Accept-Encoding': 'identity',
   Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
@@ -110,6 +110,7 @@ function extractSsl(socket: TLSSocket): SslInfo | null {
     issuer: firstString(cert.issuer?.O) || firstString(cert.issuer?.CN),
     expiresAt: expiresAt.toISOString(),
     daysRemaining,
+    altNames: parseAltNames(cert.subjectaltname),
   }
 }
 

@@ -54,6 +54,36 @@ export interface DnsRecordSet {
   error: string | null
 }
 
+/** Where a discovered subdomain came from — see server/utils/subdomains.ts. */
+export type SubdomainSource = 'cert' | 'dns' | 'ct'
+
+/**
+ * One discovered subdomain of a site's root domain and its most recent status. A snapshot, not
+ * a time series: `resolves`/`httpStatus`/`ssl*` reflect the last scan only, no `checks` rows are
+ * written for it and no incidents/notifications are raised off it.
+ */
+export interface SubdomainRow {
+  id: number
+  siteId: number
+  hostname: string
+  sources: SubdomainSource[]
+  firstSeenAt: string
+  lastSeenAt: string
+  checkedAt: string | null
+  resolves: boolean
+  addresses: string[]
+  cname: string | null
+  httpStatus: number | null
+  finalUrl: string | null
+  timeTotal: number | null
+  sslValid: boolean | null
+  sslIssuer: string | null
+  sslExpiresAt: string | null
+  sslDaysRemaining: number | null
+  error: string | null
+  ignored: boolean
+}
+
 export type BaselineMode = 'fixed' | 'adaptive'
 
 export interface Site {

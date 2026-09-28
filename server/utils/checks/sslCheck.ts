@@ -5,11 +5,24 @@ export interface SslInfo {
   issuer: string | null
   expiresAt: string | null
   daysRemaining: number | null
+  /** DNS names from the certificate's subjectAltName, wildcards (`*.example.com`) dropped. */
+  altNames: string[]
 }
 
 function firstString(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return value[0] ?? null
   return value ?? null
+}
+
+/** Parses `cert.subjectaltname`, e.g. `"DNS:a.example.com, DNS:*.example.com, IP Address:1.2.3.4"`. */
+export function parseAltNames(subjectaltname: string | undefined): string[] {
+  if (!subjectaltname) return []
+  return subjectaltname
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.startsWith('DNS:'))
+    .map((entry) => entry.slice(4).trim().toLowerCase())
+    .filter((name) => name.length > 0 && !name.startsWith('*.'))
 }
 
 export function sslCheck(hostname: string, port = 443): Promise<SslInfo | null> {
@@ -33,6 +46,7 @@ export function sslCheck(hostname: string, port = 443): Promise<SslInfo | null> 
           issuer: firstString(cert.issuer?.O) || firstString(cert.issuer?.CN),
           expiresAt: expiresAt.toISOString(),
           daysRemaining,
+          altNames: parseAltNames(cert.subjectaltname),
         })
         socket.end()
       },
