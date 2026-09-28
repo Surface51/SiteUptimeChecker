@@ -5,6 +5,16 @@ analytics for the same sites, in one dashboard.
 
 ## Monitoring
 
+### The dashboard
+
+The summary bar at the top — sites monitored, up/degraded/down, avg uptime, avg response, open
+incidents and certs/domains expiring — follows the tag filter: pick one or more tags and every
+tile, plus the fleet-status donut and the SSL-expiry chart, re-describes just that subset instead
+of the whole fleet. Avg response is check-count-weighted (not a mean of per-site averages), and the
+"open incidents" tile's MTTR is summed recovery time over summed closed incidents across the
+filtered sites, for the same reason — a mean of per-site means would let a low-traffic site count
+the same as a high-traffic one.
+
 ### Per-site check options
 
 Beyond URL, interval and the degraded-response threshold, each site (Edit → the collapsible
@@ -56,6 +66,24 @@ WHOIS expiry and DNS snapshots (already collected weekly) now raise notification
 `domain_expiring` at the 60/30/14/7-day marks, `nameservers_changed` when the NS set changes, and
 `ssl_issuer_changed` when a renewed certificate switches CA. All are suppressed during a
 maintenance window.
+
+### Subdomain discovery
+
+Each site's **Domain** tab also lists subdomains discovered under its root domain — custom
+hostnames (`staging.`, `webmail.`, `shop.`, a stray `old.`) that were never added as their own
+monitored site. Discovery combines three sources, each isolated so one failing never drops the
+others: the root domain's certificate SANs, a probe of ~60 common labels (`www`, `api`, `staging`,
+`cpanel`, …) against DNS, and Certificate Transparency logs (crt.sh). Wildcard DNS on the root
+domain is detected first and, when found, suppresses the DNS-label probe for that scan (every label
+would otherwise "resolve"); cert and CT results still stand.
+
+Every candidate is then probed — DNS resolution, a manual-redirect HTTP request and a certificate
+check, sent with the same probe identity real checks use — and stored as a status snapshot, not a
+time series: no `checks` rows, no incidents, no notifications, just the current resolves/HTTP/cert
+state per hostname. A scan is capped at 100 probed hosts (cert/DNS candidates ranked ahead of
+CT-only ones) and runs weekly per site on the same schedule as WHOIS/DNS, or on demand from
+**Rescan** on the Domain tab. A hostname can be dismissed with **Ignore** without losing its history
+of when it was first/last seen.
 
 ### Triage & command palette
 
@@ -205,6 +233,9 @@ invalid.
 | `UPTIME_USER_AGENT` | `SiteUptimeChecker/1.0 (uptime monitor)` | Replaces the whole `User-Agent` string sent on every check/response-time probe |
 | `UPTIME_MONITOR_URL` | unset | Info/status page URL, folded into the default `User-Agent` as `+<url>` |
 | `UPTIME_MONITOR_CONTACT` | unset | Operator email, sent as the RFC 7231 `From` header on every probe |
+| `UPTIME_SUBDOMAIN_SCAN` | on | Set to `0`/`false` to turn off subdomain discovery entirely |
+| `UPTIME_SUBDOMAIN_CT` | on | Set to `0`/`false` to skip the Certificate Transparency (crt.sh) source |
+| `UPTIME_SUBDOMAIN_MAX_HOSTS` | `100` | Most subdomain candidates probed in one scan |
 | `DUCKDB_MEMORY_LIMIT` | `1GB` | Memory ceiling for log queries — **the server only**, not `logs:ingest` |
 | `DUCKDB_THREADS` | `2` | Threads DuckDB may use — server only |
 | `UPTIME_URL` | `http://localhost:3000` | Server base URL the `logs:ingest` CLI hands off to |
