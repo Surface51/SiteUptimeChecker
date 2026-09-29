@@ -86,11 +86,14 @@ function toggleFilterTag(tag: string) {
   }
 }
 
-// Sites matching ANY selected tag — narrows the fleet without needing every tag present.
+// Sites matching ALL selected tags — narrows the fleet to sites carrying every tag chosen.
 const filteredSites = computed(() => {
   if (!selectedTags.value.length) return sites.value
-  const wanted = new Set(selectedTags.value.map((t) => t.toLowerCase()))
-  return sites.value.filter((s) => s.tags.some((t) => wanted.has(t.toLowerCase())))
+  const wanted = selectedTags.value.map((t) => t.toLowerCase())
+  return sites.value.filter((s) => {
+    const have = new Set(s.tags.map((t) => t.toLowerCase()))
+    return wanted.every((t) => have.has(t))
+  })
 })
 
 const sortedCardSites = computed(() => {
