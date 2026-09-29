@@ -171,7 +171,7 @@ const sortedCardSites = computed(() => {
       <SummaryBar :sites="filteredSites" />
 
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <FleetStatusDonut :sites="filteredSites" />
+        <OpenIncidentsPanel :sites="filteredSites" />
         <SslExpiryBar :sites="filteredSites" />
       </div>
 
