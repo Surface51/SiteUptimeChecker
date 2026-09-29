@@ -13,10 +13,18 @@ function hostname(site: SiteSummary) {
   }
 }
 
+type Mode = 'ssl' | 'domain'
+const mode = ref<Mode>('ssl')
+
 const ranked = computed(() => {
+  const days =
+    mode.value === 'ssl'
+      ? (s: SiteSummary) => s.latestCheck?.sslDaysRemaining ?? null
+      : (s: SiteSummary) => s.domainDaysRemaining
+
   return props.sites
-    .filter((s) => s.latestCheck?.sslDaysRemaining !== null && s.latestCheck?.sslDaysRemaining !== undefined)
-    .map((s) => ({ id: s.id, label: s.name || hostname(s), value: s.latestCheck!.sslDaysRemaining as number }))
+    .map((s) => ({ id: s.id, label: s.name || hostname(s), value: days(s) }))
+    .filter((r): r is { id: number; label: string; value: number } => r.value !== null && r.value !== undefined)
     .sort((a, b) => a.value - b.value)
     .slice(0, 10)
     .reverse() // soonest-to-expire renders at the top
@@ -57,10 +65,23 @@ function onClick(params: any) {
 
 <template>
   <UiCard>
-    <UiSectionHeading class="mb-4">SSL expiry</UiSectionHeading>
+    <UiSectionHeading class="mb-4">
+      {{ mode === 'ssl' ? 'SSL expiry' : 'Domain expiry' }}
+      <template #actions>
+        <UiSegmentedControl
+          v-model="mode"
+          :options="[
+            { label: 'SSL', value: 'ssl' },
+            { label: 'Domain', value: 'domain' },
+          ]"
+        />
+      </template>
+    </UiSectionHeading>
     <div v-if="ranked.length" :style="{ height: `${Math.max(120, ranked.length * 28)}px` }">
       <BaseChart :option="option" class="cursor-pointer" @click="onClick" />
     </div>
-    <div v-else class="flex h-24 items-center justify-center text-sm text-tertiary">No SSL data yet</div>
+    <div v-else class="flex h-24 items-center justify-center text-sm text-tertiary">
+      {{ mode === 'ssl' ? 'No SSL data yet' : 'No domain expiry data yet' }}
+    </div>
   </UiCard>
 </template>
