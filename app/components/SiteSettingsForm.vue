@@ -43,6 +43,22 @@ function field<K extends keyof SiteSettingsPayload>(key: K) {
   })
 }
 
+const { push: pushToast } = useToasts()
+const resettingBaseline = ref(false)
+
+async function resetContentBaseline() {
+  if (!props.site) return
+  resettingBaseline.value = true
+  try {
+    await $fetch(`/api/sites/${props.site.id}/content-baseline`, { method: 'POST' })
+    pushToast('Content baseline cleared and re-captured.', 'success')
+  } catch {
+    pushToast('Could not reset the content baseline.', 'error')
+  } finally {
+    resettingBaseline.value = false
+  }
+}
+
 const hasStoredPass = computed(() => props.site?.hasAuthPass ?? false)
 </script>
 
@@ -156,6 +172,14 @@ const hasStoredPass = computed(() => props.site?.hasAuthPass ?? false)
             min="1"
             max="100"
           />
+        </div>
+        <div v-if="site" class="flex flex-col items-start gap-1">
+          <UiButton variant="secondary" :disabled="resettingBaseline" @click="resetContentBaseline">
+            Reset baseline
+          </UiButton>
+          <span class="text-xs text-secondary">
+            Discards the stored snapshot and re-captures it from the live page.
+          </span>
         </div>
       </div>
     </details>

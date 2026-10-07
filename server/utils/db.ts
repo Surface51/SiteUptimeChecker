@@ -481,6 +481,11 @@ export function setSiteBodyChunks(siteId: number, chunks: string[]) {
     .run(JSON.stringify(chunks), siteId)
 }
 
+/** Drops the content-watch reference so the next check re-seeds it from the live page. */
+export function clearSiteBodyChunks(siteId: number) {
+  getDb().prepare(`UPDATE sites SET body_chunks = NULL, body_chunks_at = NULL WHERE id = ?`).run(siteId)
+}
+
 interface CheckDbRow {
   id: number
   site_id: number
