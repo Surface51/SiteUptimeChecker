@@ -64,6 +64,22 @@ const screenshotSrc = computed(() => {
   return `/screenshots/${site.value.id}.png?v=${encodeURIComponent(site.value.screenshotUpdatedAt)}`
 })
 const screenshotFailed = ref(false)
+watch(() => site.value?.screenshotUpdatedAt, () => { screenshotFailed.value = false })
+
+const { push: pushToast } = useToasts()
+const retaking = ref(false)
+async function retakeScreenshot() {
+  retaking.value = true
+  try {
+    await $fetch(`/api/sites/${id.value}/screenshot`, { method: 'POST' })
+    await refreshSite()
+    pushToast('Screenshot updated.', 'success')
+  } catch {
+    pushToast('Could not retake the screenshot.', 'error')
+  } finally {
+    retaking.value = false
+  }
+}
 
 const tabs = computed(() => [
   { label: 'Overview', to: '' },
@@ -157,7 +173,7 @@ async function removeSite() {
 
     <!-- Header -->
     <UiCard flush>
-      <div class="aspect-[3/1] w-full border-b border-border-default bg-sunken">
+      <div class="relative aspect-[3/1] w-full border-b border-border-default bg-sunken">
         <img
           v-if="screenshotSrc && !screenshotFailed"
           :src="screenshotSrc"
@@ -167,6 +183,11 @@ async function removeSite() {
         />
         <div v-else class="flex h-full w-full items-center justify-center text-tertiary">
           <UiIcon name="public" :size="44" />
+        </div>
+        <div class="absolute right-3 top-3 rounded-full bg-raised">
+          <UiButton variant="secondary" :disabled="retaking" @click="retakeScreenshot">
+            {{ retaking ? 'Capturing…' : 'Retake screenshot' }}
+          </UiButton>
         </div>
       </div>
 

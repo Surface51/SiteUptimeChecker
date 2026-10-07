@@ -32,6 +32,13 @@ export async function closeBrowser() {
   browserPromise = null
 }
 
+/** Like {@link captureScreenshot} but awaitable and failing loudly, for an explicit retake. */
+export function retakeScreenshot(siteId: number, url: string): Promise<void> {
+  const task = captureQueue.then(() => doCapture(siteId, url))
+  captureQueue = task.catch(() => {})
+  return task
+}
+
 export function captureScreenshot(siteId: number, url: string): Promise<void> {
   const task = captureQueue.then(() => doCapture(siteId, url)).catch((err) => {
     if (!warnedMissingBrowser) {
