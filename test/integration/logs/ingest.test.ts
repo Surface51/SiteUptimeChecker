@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -143,6 +143,20 @@ describe('runIngest', () => {
     const status = await runIngest([root])
     expect(status.filesSkipped).toBe(1)
     expect(await countAccessRows()).toBe(4)
+  })
+
+  it('records an unreadable file as an error and still ingests the rest', async () => {
+    writeAccessLog(seedLines(4))
+    const locked = join(root, ...SERVER_DIR, 'php-fpm-error.log')
+    writeFileSync(locked, 'x\n')
+    chmodSync(locked, 0o000)
+
+    const status = await runIngest([root])
+
+    expect(status.errors).toHaveLength(1)
+    expect(status.errors[0]).toContain('php-fpm-error.log')
+    expect(await countAccessRows()).toBe(4)
+    expect(status.running).toBe(false)
   })
 
   it('settles an empty file to done rather than leaving it pending', async () => {

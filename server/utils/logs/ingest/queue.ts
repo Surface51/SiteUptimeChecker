@@ -316,7 +316,6 @@ async function doRunIngest(rootsOverride: string[] | undefined, opts: RunIngestO
       await withLogWrite(async (conn) => {
         const siteId = await getOrCreateSite(conn, file.site, join(file.root, file.site))
         const serverId = await getOrCreateServer(conn, siteId, file.env, file.ip, file.role)
-        const plan = await planFile(conn, file, serverId)
 
         // A folder boundary: commit whatever was buffered for the previous one (as one
         // collapsed line if it was all skips, or a header + itemized lines otherwise) before
@@ -327,6 +326,21 @@ async function doRunIngest(rootsOverride: string[] | undefined, opts: RunIngestO
           pendingFolder = file.site
         }
         status.currentFolder = file.site
+
+        // Planning reads the file (head hash), so an unreadable file (e.g. a 0600 log the
+        // service user doesn't own) throws here. That must cost one file, not the whole run —
+        // otherwise every folder after it never ingests.
+        let plan: Awaited<ReturnType<typeof planFile>>
+        try {
+          plan = await planFile(conn, file, serverId)
+        } catch (err: any) {
+          const message = err?.message ?? String(err)
+          if (status.errors.length < MAX_ERRORS) status.errors.push(`${file.absPath}: ${message}`)
+          pendingFiles.push({ file: `${file.env}/${file.ip}/${file.filename}`, ok: false })
+          status.filesDone++
+          emitProgress()
+          return
+        }
 
         const spec = PARSER_REGISTRY[file.classified.logType]
         if (!spec || !plan.needsIngest) {

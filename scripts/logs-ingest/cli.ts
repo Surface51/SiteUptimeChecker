@@ -130,7 +130,15 @@ async function main() {
     for (const file of discovered) {
       const siteId = await getOrCreateSite(conn, file.site, join(file.root, file.site))
       const serverId = await getOrCreateServer(conn, siteId, file.env, file.ip, file.role)
-      const plan = await planFile(conn, file, serverId)
+      let plan: Awaited<ReturnType<typeof planFile>>
+      try {
+        plan = await planFile(conn, file, serverId)
+      } catch (err: any) {
+        // An unreadable file costs itself, not the whole run.
+        console.error(`✗ ${file.absPath}: ${err?.message ?? err}`)
+        skipped++
+        continue
+      }
       const spec = PARSER_REGISTRY[file.classified.logType as keyof typeof PARSER_REGISTRY]
       if (!spec || !plan.needsIngest) {
         skipped++
