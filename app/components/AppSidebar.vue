@@ -54,17 +54,20 @@ watch(() => route.fullPath, closeMenu)
   <aside
     class="sticky top-0 hidden h-screen w-[236px] shrink-0 flex-col gap-11 bg-black px-5 py-8 text-white lg:flex"
   >
-    <NuxtLink to="/" class="flex items-center gap-2.5 no-underline">
-      <span
-        class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border-2 border-accent font-display text-xs font-extrabold text-accent"
-      >
-        S51
-      </span>
-      <span class="flex flex-col leading-tight">
-        <span class="font-display text-base font-bold tracking-tight text-white">Site Uptime</span>
-        <span class="text-[10px] tracking-wide text-neutral-400 uppercase">Surface 51</span>
-      </span>
-    </NuxtLink>
+    <div class="flex items-center justify-between gap-2">
+      <NuxtLink to="/" class="flex items-center gap-2.5 no-underline">
+        <span
+          class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border-2 border-accent font-display text-xs font-extrabold text-accent"
+        >
+          S51
+        </span>
+        <span class="flex flex-col leading-tight">
+          <span class="font-display text-base font-bold tracking-tight text-white">Site Uptime</span>
+          <span class="text-[10px] tracking-wide text-neutral-400 uppercase">Surface 51</span>
+        </span>
+      </NuxtLink>
+      <NotificationTray placement="side" />
+    </div>
 
     <nav class="flex flex-col gap-1">
       <NuxtLink
@@ -130,7 +133,8 @@ watch(() => route.fullPath, closeMenu)
       </span>
       <span class="font-display text-sm font-bold tracking-tight text-white">Site Uptime</span>
     </NuxtLink>
-    <div class="ml-auto">
+    <div class="ml-auto flex items-center gap-1">
+      <NotificationTray placement="below" />
       <UiThemeToggle />
     </div>
   </header>
