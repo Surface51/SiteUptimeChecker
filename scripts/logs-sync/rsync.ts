@@ -205,7 +205,7 @@ export async function pullJob(job: SyncJob, transfers: Transfer[]): Promise<void
       const ff = join(scratch, 'direct.txt')
       writeFileSync(ff, direct.map((t) => t.name).join('\n') + '\n')
       await execFileAsync('rsync', [
-        '-ltz', '--size-only', `--files-from=${ff}`, '-e', ssh,
+        '-ltz', '--chmod=Fg+r', '--size-only', `--files-from=${ff}`, '-e', ssh,
         target(job, root), `${job.destDir}/`,
       ])
     }
@@ -216,7 +216,7 @@ export async function pullJob(job: SyncJob, transfers: Transfer[]): Promise<void
       const ff = join(scratch, 'staged.txt')
       writeFileSync(ff, staged.map((t) => t.name).join('\n') + '\n')
       await execFileAsync('rsync', [
-        '-ltz', '--size-only', `--files-from=${ff}`, '-e', ssh,
+        '-ltz', '--chmod=Fg+r', '--size-only', `--files-from=${ff}`, '-e', ssh,
         target(job, root), `${tmpDir}/`,
       ])
       for (const t of staged) {
