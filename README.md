@@ -52,6 +52,13 @@ the User-Agent. Set `UPTIME_MONITOR_URL` to add a `+<url>` info link to the User
 `UPTIME_MONITOR_CONTACT` to send a `From:` operator email, or `UPTIME_USER_AGENT` to replace the
 User-Agent string outright. Per-site custom request headers still override any of these.
 
+The dashboard screenshots are taken by headless Chromium, which sends the same `User-Agent` and
+`X-Uptime-Monitor` header (to the site's own host only), so the same allow-list covers them. If a
+Cloudflare verification page still appears, the capture waits up to 45s for it to clear; if it
+doesn't, the previous screenshot is kept rather than replaced with the challenge page. For a
+reliable pass, make the Cloudflare skip/allow rule match the `X-Uptime-Monitor` header (or the
+User-Agent) — an IP-only allow-list does not cover traffic from a different egress address.
+
 ### Daily rollups & retention
 
 Raw `checks` rows are pruned after ~30 days by a once-a-day job (previously a delete on every
