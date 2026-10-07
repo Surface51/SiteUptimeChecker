@@ -7,34 +7,18 @@
 withDefaults(defineProps<{ placement?: 'side' | 'below' }>(), { placement: 'side' })
 
 const { notifications, unreadCount, markAllRead } = useNotifications()
-const { history, unseenCount, markSeen, clearHistory } = useToasts()
 
 const open = ref(false)
 const root = ref<HTMLElement | null>(null)
 
-const badge = computed(() => unreadCount.value + unseenCount.value)
 const recentAlerts = computed(() =>
   (notifications.value ?? [])
     .filter((n) => !n.dismissed)
     .slice(0, 6),
 )
 
-const typeIcons: Record<string, string> = {
-  info: 'info',
-  success: 'check_circle',
-  warning: 'warning',
-  error: 'error',
-}
-const typeColors: Record<string, string> = {
-  info: 'text-maint',
-  success: 'text-up',
-  warning: 'text-degraded',
-  error: 'text-down',
-}
-
 function toggle() {
   open.value = !open.value
-  if (open.value) markSeen()
 }
 
 function go(href?: string) {
@@ -57,11 +41,6 @@ onUnmounted(() => {
   document.removeEventListener('click', onDocClick)
   document.removeEventListener('keydown', onKey)
 })
-
-// New messages arriving while the tray is open count as seen straight away.
-watch(unseenCount, (n) => {
-  if (open.value && n > 0) markSeen()
-})
 </script>
 
 <template>
@@ -75,11 +54,10 @@ watch(unseenCount, (n) => {
     >
       <UiIcon name="notifications" :size="20" />
       <span
-        v-if="badge > 0"
+        v-if="unreadCount > 0"
         class="absolute -top-0.5 -right-0.5 flex min-w-[16px] items-center justify-center rounded-full bg-accent px-1 text-[10px] leading-4 font-bold text-white"
-        :class="unseenCount > 0 ? 'animate-pulse' : ''"
       >
-        {{ badge > 99 ? '99+' : badge }}
+        {{ unreadCount > 99 ? '99+' : unreadCount }}
       </span>
     </button>
 
@@ -89,28 +67,7 @@ watch(unseenCount, (n) => {
       :class="placement === 'side' ? 'top-0 left-full ml-3' : 'top-full right-0 mt-2'"
     >
       <div class="max-h-[70vh] overflow-y-auto">
-        <section v-if="history.length">
-          <div class="flex items-center justify-between px-4 pt-3 pb-1">
-            <h3 class="text-xs font-semibold tracking-wide text-tertiary uppercase">Recent activity</h3>
-            <button type="button" class="cursor-pointer text-xs text-secondary hover:text-primary" @click="clearHistory">
-              Clear
-            </button>
-          </div>
-          <ul>
-            <li
-              v-for="h in history.slice(0, 8)"
-              :key="h.id"
-              class="flex items-start gap-2.5 px-4 py-2"
-              :class="h.href ? 'cursor-pointer hover:bg-sunken' : ''"
-              @click="h.href && go(h.href)"
-            >
-              <UiIcon :name="typeIcons[h.type] ?? 'info'" :size="16" :class="typeColors[h.type]" class="mt-0.5 shrink-0" />
-              <span class="min-w-0 flex-1">{{ h.message }}</span>
-            </li>
-          </ul>
-        </section>
-
-        <section v-if="recentAlerts.length" :class="history.length ? 'border-t border-border-default' : ''">
+        <section v-if="recentAlerts.length">
           <div class="flex items-center justify-between px-4 pt-3 pb-1">
             <h3 class="text-xs font-semibold tracking-wide text-tertiary uppercase">Alerts</h3>
             <button
@@ -141,7 +98,7 @@ watch(unseenCount, (n) => {
           </ul>
         </section>
 
-        <p v-if="!history.length && !recentAlerts.length" class="px-4 py-6 text-center text-secondary">
+        <p v-if="!recentAlerts.length" class="px-4 py-6 text-center text-secondary">
           Nothing new.
         </p>
       </div>
