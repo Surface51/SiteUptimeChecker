@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { chartColors, type EChartsOption } from '~/utils/echarts'
+import type { EChartsOption } from '~/utils/echarts'
 import { logTimeMs } from '~/utils/logFormat'
 
 export interface SeriesSpec {
@@ -64,13 +64,10 @@ const option = computed<EChartsOption>(() => {
       showSymbol: false,
       data: byName.get(spec.name) ?? [],
       lineStyle: { width: 2, color: spec.color },
-      itemStyle: {
-        color: spec.color,
-        // A 2px cut in the surface colour keeps stacked segments from bleeding together.
-        ...(props.stack && props.type === 'bar'
-          ? { borderColor: chartColors.surface, borderWidth: 2 }
-          : {}),
-      },
+      // Time-axis bars can be only a few px wide; a surface-coloured border (drawn inside the
+      // bar) would swallow the whole fill and leave them looking transparent, so no border.
+      barMinWidth: props.type === 'bar' ? 3 : undefined,
+      itemStyle: { color: spec.color },
       areaStyle: props.type === 'line' && props.stack ? { opacity: 0.5, color: spec.color } : undefined,
     })),
   }
