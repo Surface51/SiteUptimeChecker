@@ -25,9 +25,18 @@ const { data: phpGroups, pending: phpPending } = useLogView<{ groups: any[] }>('
 }))
 
 // Blue/red rather than amber/red — see logSeriesPalette() for the contrast measurements.
+// 4xx often outnumbers 5xx by orders of magnitude, so stacking or sharing an axis flattens 5xx
+// to nothing. 5xx gets its own right-hand axis, drawn as a line over the 4xx bars, so the two
+// can be compared in shape (spikes lining up) rather than in absolute volume.
 const errorSeries = computed(() => [
-  { name: '4xx', label: '4xx client', color: chartColors.logAlt },
-  { name: '5xx', label: '5xx server', color: chartColors.down },
+  { name: '4xx', label: '4xx client (left axis)', color: chartColors.logAlt, type: 'bar' as const },
+  {
+    name: '5xx',
+    label: '5xx server (right axis)',
+    color: chartColors.down,
+    type: 'line' as const,
+    secondaryAxis: true,
+  },
 ])
 
 const topColumns: LogColumn[] = [
@@ -60,7 +69,6 @@ const phpColumns: LogColumn[] = [
           :rows="timeseries?.series ?? []"
           :series="errorSeries"
           type="bar"
-          stack
           :value-formatter="formatCount"
           empty="No 4xx or 5xx responses in this range"
         />

@@ -7,6 +7,14 @@ export interface SeriesSpec {
   name: string
   label: string
   color: string
+  /** Overrides the chart-level `type` for this series (e.g. a line over bars). */
+  type?: 'line' | 'bar'
+  /**
+   * Plot against a second, right-hand value axis. For series whose magnitudes differ by orders
+   * of magnitude, a shared axis flattens the smaller one into the baseline; its own scale
+   * keeps its shape, and so the correlation, visible.
+   */
+  secondaryAxis?: boolean
 }
 
 const props = withDefaults(
@@ -25,7 +33,12 @@ const props = withDefaults(
     valueFormatter?: (value: number) => string
     empty?: string
   }>(),
-  { type: 'line', stack: false, height: 'h-72', empty: 'Nothing in this range' },
+  {
+    type: 'line',
+    stack: false,
+    height: 'h-72',
+    empty: 'Nothing in this range',
+  },
 )
 
 const hasData = computed(() => props.rows.length > 0)
@@ -39,17 +52,41 @@ const option = computed<EChartsOption>(() => {
   for (const points of byName.values()) points.sort((a, b) => a[0] - b[0])
 
   const multi = props.series.length > 1
+  const dual = props.series.some((spec) => spec.secondaryAxis)
+  const axisSeries = (secondary: boolean) =>
+    props.series.find((spec) => !!spec.secondaryAxis === secondary)
   const format = props.valueFormatter ?? ((v: number) => v.toLocaleString())
 
   return {
-    grid: { left: 56, right: 16, top: multi ? 34 : 16, bottom: 28 },
+    grid: { left: 56, right: dual ? 56 : 16, top: multi ? 34 : 16, bottom: 28 },
     // A legend is always present for two or more series, so identity is never colour alone.
-    legend: multi ? { top: 0, textStyle: { fontSize: 11 }, itemHeight: 8, itemWidth: 12 } : undefined,
+    legend: multi
+      ? { top: 0, textStyle: { fontSize: 11 }, itemHeight: 8, itemWidth: 12 }
+      : undefined,
     xAxis: { type: 'time' },
-    yAxis: {
-      type: 'value',
-      axisLabel: { formatter: (value: number) => format(value) },
-    },
+    // With a secondary axis each axis is tinted to its series so it is clear which scale
+    // belongs to which; the secondary one drops its grid lines to avoid a second lattice.
+    yAxis: [
+      {
+        type: 'value',
+        axisLabel: {
+          formatter: (value: number) => format(value),
+          color: dual ? axisSeries(false)?.color : undefined,
+        },
+      },
+      ...(dual
+        ? [
+            {
+              type: 'value',
+              splitLine: { show: false },
+              axisLabel: {
+                formatter: (value: number) => format(value),
+                color: axisSeries(true)?.color,
+              },
+            },
+          ]
+        : []),
+    ],
     tooltip: {
       // Crosshair on the whole bucket, not per-mark: the point of these charts is comparing
       // series at one instant.
@@ -57,19 +94,24 @@ const option = computed<EChartsOption>(() => {
       axisPointer: { type: props.type === 'bar' ? 'shadow' : 'line' },
       valueFormatter: (value: number | null) => (value === null ? '—' : format(Number(value))),
     },
-    series: props.series.map((spec) => ({
-      name: spec.label,
-      type: props.type,
-      stack: props.stack ? 'total' : undefined,
-      showSymbol: false,
-      data: byName.get(spec.name) ?? [],
-      lineStyle: { width: 2, color: spec.color },
-      // Time-axis bars can be only a few px wide; a surface-coloured border (drawn inside the
-      // bar) would swallow the whole fill and leave them looking transparent, so no border.
-      barMinWidth: props.type === 'bar' ? 3 : undefined,
-      itemStyle: { color: spec.color },
-      areaStyle: props.type === 'line' && props.stack ? { opacity: 0.5, color: spec.color } : undefined,
-    })),
+    series: props.series.map((spec) => {
+      const type = spec.type ?? props.type
+      return {
+        name: spec.label,
+        type,
+        yAxisIndex: spec.secondaryAxis ? 1 : 0,
+        stack: props.stack ? 'total' : undefined,
+        showSymbol: type === 'line' && dual,
+        symbolSize: 6,
+        data: byName.get(spec.name) ?? [],
+        lineStyle: { width: 2, color: spec.color },
+        // Time-axis bars can be only a few px wide; a surface-coloured border (drawn inside the
+        // bar) would swallow the whole fill and leave them looking transparent, so no border.
+        barMinWidth: type === 'bar' ? 3 : undefined,
+        itemStyle: { color: spec.color },
+        areaStyle: type === 'line' && props.stack ? { opacity: 0.5, color: spec.color } : undefined,
+      }
+    }),
   }
 })
 </script>
