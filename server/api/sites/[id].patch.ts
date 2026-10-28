@@ -17,6 +17,7 @@ export default defineEventHandler(async (event) => {
 
   const patch: Parameters<typeof updateSite>[1] = parseSiteSettings(body ?? {}, { partial: true })
   if (body?.enabled !== undefined) patch.enabled = !!body.enabled
+  if (body?.pinned !== undefined) patch.pinned = !!body.pinned
 
   const site = updateSite(id, patch)!
 
