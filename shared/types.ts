@@ -136,6 +136,9 @@ export interface Site {
 
   // --- SLA (5) — percent target, e.g. 99.9. Null hides the SLA panel. ---
   slaTarget: number | null
+
+  /** Per-site deviations from the global notification settings; null = follow the global ones. */
+  notificationOverrides: NotificationOverrides | null
 }
 
 export interface CheckRow {
@@ -305,6 +308,8 @@ export type NotificationType =
   | 'nameservers_changed'
   | 'ssl_issuer_changed'
   | 'content_changed'
+  // A site changing state too often to alert on each transition — see server/utils/statusAlerts.ts.
+  | 'flapping'
   // Raised from ingested logs rather than from a check — see server/utils/logs/alerts.ts.
   | 'log_5xx_spike'
   | 'log_php_fatal'
@@ -325,6 +330,7 @@ export const NOTIFICATION_TYPES = [
   'nameservers_changed',
   'ssl_issuer_changed',
   'content_changed',
+  'flapping',
   'log_5xx_spike',
   'log_php_fatal',
   'log_threat_ip',
@@ -396,6 +402,41 @@ export interface NotificationRow {
   read: boolean
   dismissed: boolean
   context: NotificationContext | null
+  /** How loudly the client should surface this one, resolved when it was raised. */
+  delivery: NotificationDelivery
+}
+
+/** How a notification is surfaced: `off` is never stored, `feed` is list-only, then toast, then desktop. */
+export type NotificationDelivery = 'off' | 'feed' | 'toast' | 'desktop'
+
+export interface NotificationTypeSetting {
+  delivery: NotificationDelivery
+  /** Hours before the same alert may re-fire; null = the producer's built-in default. */
+  cooldownHours: number | null
+}
+
+export interface NotificationSettings {
+  types: Record<NotificationType, NotificationTypeSetting>
+  /** Consecutive down checks before `down` is raised. */
+  downConfirmations: number
+  /** Consecutive non-down checks before `up` is raised (only after a `down` was sent). */
+  recoveryConfirmations: number
+  /** Consecutive degraded checks before `degraded` is raised. */
+  degradedConfirmations: number
+  /** `transitions` status changes within the last `window` checks mean the site is flapping. */
+  flap: { window: number; transitions: number }
+  /** Local-time window (HH:MM) in which delivery is capped at `allow`; down/flapping still get through. */
+  quietHours: { enabled: boolean; start: string; end: string; allow: NotificationDelivery }
+  /** More than this many toasts in one poll collapse into a single summary. */
+  groupBurstsOver: number
+}
+
+/** What a site may override of the global settings. Absent keys follow the global value. */
+export interface NotificationOverrides {
+  types?: Partial<Record<NotificationType, NotificationDelivery>>
+  downConfirmations?: number
+  recoveryConfirmations?: number
+  degradedConfirmations?: number
 }
 
 export type LighthouseJobStatus = 'queued' | 'running' | 'done' | 'error'

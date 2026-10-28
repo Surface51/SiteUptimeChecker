@@ -1,13 +1,25 @@
 import type { CheckRow, Site } from '#shared/types'
-import { insertNotification } from './db'
+import { getAlertedStatus, getRecentStatuses, insertNotification, setAlertedStatus } from './db'
 import { claimAlert } from './alertState'
+import { resolveForSite } from './notificationSettings'
+import { evaluateStatusAlert } from './statusAlerts'
 
 const SSL_NOTIFY_THRESHOLD_DAYS = 14
+const DEGRADED_COOLDOWN_HOURS = 1
+const FLAPPING_COOLDOWN_HOURS = 6
 
 export function detectAndNotify(site: Site, previous: CheckRow | null, current: CheckRow) {
   const label = site.name || site.url
+  const cfg = resolveForSite(site)
+  const alerted = getAlertedStatus(site.id)
+  // Reads the statuses back from the DB (the new check is already stored), since a decision now
+  // spans several checks rather than just previous → current.
+  const recent = getRecentStatuses(site.id, Math.max(cfg.flap.window, 10))
+  const decision = evaluateStatusAlert(recent, alerted, cfg)
 
-  if (current.status === 'down' && previous?.status !== 'down') {
+  if (decision.nextAlerted !== alerted) setAlertedStatus(site.id, decision.nextAlerted)
+
+  if (decision.emit === 'down') {
     const reason = current.assertionFailed
       ? current.assertionDetail || 'content assertion failed'
       : current.httpStatus
@@ -19,19 +31,27 @@ export function detectAndNotify(site: Site, previous: CheckRow | null, current: 
       message: `${label} is down (${reason})`,
       context: { kind: 'check', httpStatus: current.httpStatus, reason },
     })
-  } else if (current.status !== 'down' && previous?.status === 'down') {
+  } else if (decision.emit === 'up') {
     insertNotification({
       siteId: site.id,
       type: 'up',
       message: `${label} is back up`,
       context: { kind: 'check', httpStatus: current.httpStatus, reason: null },
     })
-  } else if (current.status === 'degraded' && previous?.status === 'up') {
+  } else if (decision.emit === 'degraded' && claimAlert(site.id, 'degraded', '', DEGRADED_COOLDOWN_HOURS)) {
     insertNotification({
       siteId: site.id,
       type: 'degraded',
       message: `${label} is degraded (slow response or SSL nearing expiry)`,
       context: { kind: 'check', httpStatus: current.httpStatus, reason: null },
+    })
+  } else if (decision.emit === 'flapping' && claimAlert(site.id, 'flapping', '', FLAPPING_COOLDOWN_HOURS)) {
+    const reason = `${decision.flapTransitions} status changes in the last ${cfg.flap.window} checks`
+    insertNotification({
+      siteId: site.id,
+      type: 'flapping',
+      message: `${label} is flapping (${reason}) — down/up alerts paused until it settles`,
+      context: { kind: 'check', httpStatus: current.httpStatus, reason },
     })
   }
 

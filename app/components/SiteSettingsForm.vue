@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SiteSummary } from '#shared/types'
+import { NOTIFICATION_TYPES, type NotificationDelivery, type NotificationOverrides, type NotificationType, type SiteSummary } from '#shared/types'
 import type { SiteSettingsPayload } from '~/utils/siteSettingsPayload'
 
 /**
@@ -39,6 +39,53 @@ function field<K extends keyof SiteSettingsPayload>(key: K) {
     get: () => model.value[key],
     set: (v: SiteSettingsPayload[K]) => {
       model.value = { ...model.value, [key]: v }
+    },
+  })
+}
+
+const { settings: globalNotifications } = useNotificationSettings()
+
+const deliveryLabel: Record<NotificationDelivery, string> = {
+  off: 'Off',
+  feed: 'Feed only',
+  toast: 'Toast',
+  desktop: 'Desktop',
+}
+const deliveryChoices = (['off', 'feed', 'toast', 'desktop'] as const).map((value) => ({
+  label: deliveryLabel[value],
+  value,
+}))
+
+function typeOverrideOptions(type: NotificationType) {
+  const global = globalNotifications.value.types[type].delivery
+  return [{ label: `Use global (${deliveryLabel[global]})`, value: '' }, ...deliveryChoices]
+}
+
+function setOverrides(next: NotificationOverrides) {
+  model.value = { ...model.value, notificationOverrides: next }
+}
+
+function typeOverride(type: NotificationType) {
+  return computed({
+    get: () => model.value.notificationOverrides.types?.[type] ?? '',
+    set: (v: string | number) => {
+      const types = { ...model.value.notificationOverrides.types }
+      if (v === '') delete types[type]
+      else types[type] = v as NotificationDelivery
+      setOverrides({ ...model.value.notificationOverrides, types })
+    },
+  })
+}
+
+type ConfirmationKey = 'downConfirmations' | 'recoveryConfirmations' | 'degradedConfirmations'
+function confirmationOverride(key: ConfirmationKey) {
+  return computed({
+    get: () => model.value.notificationOverrides[key] ?? '',
+    set: (v: string | number) => {
+      const next = { ...model.value.notificationOverrides }
+      if (v === '' || Number.isNaN(Number(v))) delete next[key]
+      else next[key] = Number(v)
+      setOverrides(next)
     },
   })
 }
@@ -180,6 +227,57 @@ const hasStoredPass = computed(() => props.site?.hasAuthPass ?? false)
           <span class="text-xs text-secondary">
             Discards the stored snapshot and re-captures it from the live page.
           </span>
+        </div>
+      </div>
+    </details>
+
+    <details class="rounded-md border border-border-default px-4 py-3">
+      <summary class="cursor-pointer text-sm font-medium text-secondary">Notifications</summary>
+      <p class="mt-2 text-xs text-tertiary">
+        Overrides for this site only. Anything left on “Use global” follows the
+        <NuxtLink to="/settings/notifications" class="underline">notification settings</NuxtLink>.
+      </p>
+      <div class="mt-3 flex flex-col gap-4">
+        <div class="flex flex-wrap gap-4">
+          <div class="sm:w-56">
+            <UiInput
+              v-model="confirmationOverride('downConfirmations').value"
+              label="Checks before “down”"
+              type="number"
+              min="1"
+              max="10"
+              :placeholder="`Global: ${globalNotifications.downConfirmations}`"
+            />
+          </div>
+          <div class="sm:w-56">
+            <UiInput
+              v-model="confirmationOverride('recoveryConfirmations').value"
+              label="Checks before “back up”"
+              type="number"
+              min="1"
+              max="10"
+              :placeholder="`Global: ${globalNotifications.recoveryConfirmations}`"
+            />
+          </div>
+          <div class="sm:w-56">
+            <UiInput
+              v-model="confirmationOverride('degradedConfirmations').value"
+              label="Checks before “degraded”"
+              type="number"
+              min="1"
+              max="10"
+              :placeholder="`Global: ${globalNotifications.degradedConfirmations}`"
+            />
+          </div>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <UiSelect
+            v-for="type in NOTIFICATION_TYPES"
+            :key="type"
+            v-model="typeOverride(type).value"
+            :label="notificationTypeLabel[type]"
+            :options="typeOverrideOptions(type)"
+          />
         </div>
       </div>
     </details>

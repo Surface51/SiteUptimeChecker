@@ -8,12 +8,7 @@ const { push: pushToast } = useToasts()
 
 // These three actions used to live in the header's NotificationBell dropdown,
 // which the sidebar redesign replaced with a plain unread badge.
-const {
-  markAllRead,
-  desktopEnabled,
-  enableDesktopNotifications,
-  disableDesktopNotifications,
-} = useNotifications()
+const { markAllRead } = useNotifications()
 
 const READ_OPTIONS = [
   { label: 'All', value: 'all' as const },
@@ -193,11 +188,6 @@ async function undoClear() {
   lastClearedIds.value = null
   await reload()
 }
-
-function toggleDesktop() {
-  if (desktopEnabled.value) disableDesktopNotifications()
-  else enableDesktopNotifications()
-}
 </script>
 
 <template>
@@ -208,13 +198,7 @@ function toggleDesktop() {
         <p class="mt-1.5 text-base text-secondary">Full history across all monitored sites.</p>
       </div>
       <div class="flex flex-wrap gap-2.5">
-        <UiButton
-          variant="ghost"
-          :icon="desktopEnabled ? 'notifications_active' : 'notifications_off'"
-          @click="toggleDesktop"
-        >
-          {{ desktopEnabled ? 'Desktop on' : 'Enable desktop' }}
-        </UiButton>
+        <UiButton variant="ghost" icon="tune" @click="navigateTo('/settings/notifications')">Settings</UiButton>
         <UiButton variant="ghost" icon="clear_all" @click="onClearAll">Clear all</UiButton>
         <UiButton variant="secondary" icon="done_all" @click="onMarkAllRead">Mark all read</UiButton>
       </div>

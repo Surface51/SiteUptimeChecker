@@ -2,6 +2,7 @@ import * as chromeLauncher from 'chrome-launcher'
 import lighthouse, { desktopConfig } from 'lighthouse'
 import { chromium } from 'playwright'
 import type { LighthouseFormFactor, LighthouseJob, LighthouseReport, Site } from '#shared/types'
+import { claimAlert } from './alertState'
 import { getLatestLighthouseReport, insertLighthouseReport, insertNotification, listSites } from './db'
 
 const ONLY_CATEGORIES = ['performance', 'accessibility', 'best-practices', 'seo']
@@ -213,7 +214,8 @@ function checkRegression(
   if (current.performance === null || !previous || previous.performance === null) return
 
   const drop = previous.performance - current.performance
-  if (drop >= REGRESSION_THRESHOLD) {
+  // Per form factor, so a regression that persists across daily runs alerts once a day at most.
+  if (drop >= REGRESSION_THRESHOLD && claimAlert(site.id, 'lighthouse_regression', formFactor, 24)) {
     const label = site.name || site.url
     insertNotification({
       siteId: site.id,

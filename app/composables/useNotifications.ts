@@ -13,6 +13,7 @@ const TOAST_TYPE: Record<NotificationType, 'success' | 'warning' | 'error'> = {
   nameservers_changed: 'warning',
   ssl_issuer_changed: 'warning',
   content_changed: 'warning',
+  flapping: 'warning',
   log_5xx_spike: 'error',
   log_php_fatal: 'error',
   log_threat_ip: 'warning',
@@ -33,6 +34,7 @@ let interval: ReturnType<typeof setInterval> | undefined
 export function useNotifications() {
   const { data, refresh } = useFetch<NotificationRow[]>('/api/notifications', { default: () => [] })
   const { push: pushToast } = useToasts()
+  const { settings } = useNotificationSettings()
 
   const unreadCount = computed(() => (data.value ?? []).filter((n) => !n.read).length)
 
@@ -45,14 +47,20 @@ export function useNotifications() {
     const canDesktopNotify =
       desktopEnabled.value && typeof Notification !== 'undefined' && Notification.permission === 'granted'
 
-    for (const n of data.value ?? []) {
-      if (!knownIds.has(n.id)) {
-        knownIds.add(n.id)
-        // In-app toast fires regardless of desktop-notification permission.
-        pushToast(n.message, TOAST_TYPE[n.type] ?? 'info', notificationHref(n))
-        if (canDesktopNotify) {
-          new Notification('Site Uptime', { body: n.message })
-        }
+    const fresh = (data.value ?? []).filter((n) => !knownIds.has(n.id))
+    for (const n of fresh) knownIds.add(n.id)
+
+    // Each notification carries the delivery resolved when it was raised ('feed' never toasts);
+    // quiet hours and burst grouping are applied here since they depend on the viewer's clock.
+    const plan = planDeliveries(fresh, settings.value, new Date())
+    for (const { notification: n, level } of plan.individual) {
+      pushToast(n.message, TOAST_TYPE[n.type] ?? 'info', notificationHref(n))
+      if (level === 'desktop' && canDesktopNotify) new Notification('Site Uptime', { body: n.message })
+    }
+    if (plan.summary) {
+      pushToast(plan.summary.message, 'warning', '/notifications')
+      if (plan.summary.level === 'desktop' && canDesktopNotify) {
+        new Notification('Site Uptime', { body: plan.summary.message })
       }
     }
   }

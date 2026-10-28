@@ -1,6 +1,7 @@
 import { createError } from 'h3'
-import type { BaselineMode } from '#shared/types'
+import type { BaselineMode, NotificationOverrides } from '#shared/types'
 import { normalizeLogSlug } from './logs/slug'
+import { parseNotificationOverrides } from './notificationSettings'
 import { normalizeSiteUrl } from './url'
 
 /**
@@ -33,6 +34,7 @@ export interface SiteSettings {
   contentWatch: boolean
   contentWatchSensitivity: number
   slaTarget: number | null
+  notificationOverrides: NotificationOverrides | null
 }
 
 export const VALID_INTERVALS = new Set([60, 300, 900, 3600])
@@ -219,6 +221,9 @@ export function parseSiteSettings(body: Record<string, unknown>, opts: { partial
       out.slaTarget = n
     }
   }
+
+  // --- Notification overrides ---
+  if (want('notificationOverrides')) out.notificationOverrides = parseNotificationOverrides(b.notificationOverrides)
 
   return out
 }

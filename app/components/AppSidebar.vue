@@ -12,7 +12,8 @@ const navItems = [
   { to: '/incidents', label: 'Incidents', icon: 'crisis_alert', exact: false },
   { to: '/compare', label: 'Compare', icon: 'compare_arrows', exact: false },
   { to: '/logs', label: 'Logs', icon: 'receipt_long', exact: false },
-  { to: '/notifications', label: 'Notifications', icon: 'notifications', exact: false },
+  { to: '/notifications', label: 'Notifications', icon: 'notifications', exact: true },
+  { to: '/settings/notifications', label: 'Settings', icon: 'tune', exact: false },
 ]
 
 const { open: openCommandPalette } = useCommandPalette()

@@ -102,13 +102,23 @@ onUnmounted(() => {
           Nothing new.
         </p>
       </div>
-      <NuxtLink
-        to="/notifications"
-        class="block border-t border-border-default px-4 py-2.5 text-center text-xs font-medium text-accent no-underline hover:bg-sunken"
-        @click="open = false"
-      >
-        View all notifications
-      </NuxtLink>
+      <div class="flex border-t border-border-default text-xs font-medium">
+        <NuxtLink
+          to="/notifications"
+          class="flex-1 px-4 py-2.5 text-center text-accent no-underline hover:bg-sunken"
+          @click="open = false"
+        >
+          View all notifications
+        </NuxtLink>
+        <NuxtLink
+          to="/settings/notifications"
+          class="border-l border-border-default px-4 py-2.5 text-secondary no-underline hover:bg-sunken"
+          aria-label="Notification settings"
+          @click="open = false"
+        >
+          Settings
+        </NuxtLink>
+      </div>
     </div>
   </div>
 </template>

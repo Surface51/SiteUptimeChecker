@@ -19,7 +19,10 @@ import type {
   LighthouseReport,
   MaintenanceWindowRow,
   NotificationContext,
+  NotificationDelivery,
+  NotificationOverrides,
   NotificationRow,
+  NotificationSettings,
   NotificationType,
   RedirectHop,
   SecurityHeadersReport,
@@ -32,6 +35,7 @@ import type {
   SubdomainSource,
   WhoisRecord,
 } from '#shared/types'
+import { mergeNotificationSettings, resolveSettingsForSite } from '../../shared/notificationSettings'
 
 const DATA_DIR = process.env.UPTIME_DATA_DIR ?? join(process.cwd(), '.data')
 const SCREENSHOTS_DIR = join(DATA_DIR, 'screenshots')
@@ -239,6 +243,21 @@ export function getDb(): Database.Database {
       PRIMARY KEY (site_id, alert_type, fingerprint)
     );
 
+    -- Global notification settings: one JSON blob per key (currently just 'global'), merged onto
+    -- the defaults in shared/notificationSettings.ts so a missing row means "all defaults".
+    CREATE TABLE IF NOT EXISTS notification_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    -- The status we last *alerted* about per site, which lags the raw check status while a
+    -- down/degraded streak is still being confirmed. See server/utils/statusAlerts.ts.
+    CREATE TABLE IF NOT EXISTS site_alert_status (
+      site_id INTEGER PRIMARY KEY REFERENCES sites(id) ON DELETE CASCADE,
+      alerted_status TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Per log-ingress folder settings, keyed by folder name rather than a site id: a folder
     -- can sit in log-ingress/ with no monitored site and no DuckDB rows yet. Lives here in
     -- SQLite (not the DuckDB log store) so the status page and the CLI can both read it while
@@ -365,6 +384,8 @@ function migrate(db: Database.Database) {
   add(siteCols, 'sites', 'body_chunks_at', `body_chunks_at TEXT`)
   add(siteCols, 'sites', 'sla_target', `sla_target REAL`)
   add(siteCols, 'sites', 'pinned', `pinned INTEGER NOT NULL DEFAULT 0`)
+  add(siteCols, 'sites', 'notification_overrides', `notification_overrides TEXT`)
+  add(notifCols, 'notifications', 'delivery', `delivery TEXT NOT NULL DEFAULT 'toast'`)
 
   add(checkCols, 'checks', 'assertion_failed', `assertion_failed INTEGER`)
   add(checkCols, 'checks', 'assertion_detail', `assertion_detail TEXT`)
@@ -411,6 +432,7 @@ interface SiteRow {
   body_chunks_at: string | null
   sla_target: number | null
   pinned: number
+  notification_overrides: string | null
 }
 
 function parseHeaders(raw: string | null): Record<string, string> | null {
@@ -422,6 +444,15 @@ function parseHeaders(raw: string | null): Record<string, string> | null {
     // fall through
   }
   return null
+}
+
+function parseJson<T>(raw: string | null): T | null {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
 }
 
 function mapSite(row: SiteRow): Site {
@@ -454,6 +485,7 @@ function mapSite(row: SiteRow): Site {
     contentWatch: !!row.content_watch,
     contentWatchSensitivity: row.content_watch_sensitivity ?? 30,
     slaTarget: row.sla_target,
+    notificationOverrides: parseJson<NotificationOverrides>(row.notification_overrides),
   }
 }
 
@@ -599,10 +631,11 @@ const SITE_SETTINGS_COLUMNS: Record<string, string> = {
   contentWatch: 'content_watch',
   contentWatchSensitivity: 'content_watch_sensitivity',
   slaTarget: 'sla_target',
+  notificationOverrides: 'notification_overrides',
 }
 
 function toSiteDbValue(key: string, value: unknown): unknown {
-  if (key === 'requestHeaders') return value == null ? null : JSON.stringify(value)
+  if (key === 'requestHeaders' || key === 'notificationOverrides') return value == null ? null : JSON.stringify(value)
   if (key === 'followRedirects' || key === 'contentWatch') return value ? 1 : 0
   return value as string | number | null
 }
@@ -1898,6 +1931,7 @@ interface NotificationDbRow {
   read: number
   dismissed: number
   context: string | null
+  delivery: string | null
   site_name: string | null
   site_url: string
 }
@@ -1924,18 +1958,77 @@ function mapNotification(row: NotificationDbRow): NotificationRow {
     read: !!row.read,
     dismissed: !!row.dismissed,
     context,
+    delivery: row.delivery === 'feed' || row.delivery === 'desktop' ? row.delivery : 'toast',
   }
 }
 
+/** The delivery that applies to one site's notification of `type`, after the site's overrides. */
+export function getEffectiveDelivery(siteId: number, type: NotificationType): NotificationDelivery {
+  const row = getDb()
+    .prepare('SELECT notification_overrides FROM sites WHERE id = ?')
+    .get(siteId) as { notification_overrides: string | null } | undefined
+  const settings = resolveSettingsForSite(
+    mergeNotificationSettings(getStoredNotificationSettings()),
+    parseJson<NotificationOverrides>(row?.notification_overrides ?? null),
+  )
+  return settings.types[type].delivery
+}
+
+/** Returns false when the type is switched off for this site, in which case nothing is stored. */
 export function insertNotification(input: {
   siteId: number
   type: NotificationType
   message: string
   context?: NotificationContext
-}) {
+}): boolean {
+  const delivery = getEffectiveDelivery(input.siteId, input.type)
+  if (delivery === 'off') return false
   getDb()
-    .prepare('INSERT INTO notifications (site_id, type, message, context) VALUES (?, ?, ?, ?)')
-    .run(input.siteId, input.type, input.message, input.context ? JSON.stringify(input.context) : null)
+    .prepare('INSERT INTO notifications (site_id, type, message, context, delivery) VALUES (?, ?, ?, ?, ?)')
+    .run(input.siteId, input.type, input.message, input.context ? JSON.stringify(input.context) : null, delivery)
+  return true
+}
+
+// ---------- notification settings / alert status ----------
+
+export function getStoredNotificationSettings(): unknown {
+  const row = getDb()
+    .prepare(`SELECT value FROM notification_settings WHERE key = 'global'`)
+    .get() as { value: string } | undefined
+  return parseJson<unknown>(row?.value ?? null)
+}
+
+export function setStoredNotificationSettings(settings: NotificationSettings) {
+  getDb()
+    .prepare(
+      `INSERT INTO notification_settings (key, value) VALUES ('global', ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    )
+    .run(JSON.stringify(settings))
+}
+
+/** Statuses of the site's last `limit` checks, newest first. */
+export function getRecentStatuses(siteId: number, limit: number): CheckStatus[] {
+  const rows = getDb()
+    .prepare('SELECT status FROM checks WHERE site_id = ? ORDER BY checked_at DESC, id DESC LIMIT ?')
+    .all(siteId, limit) as { status: CheckStatus }[]
+  return rows.map((r) => r.status)
+}
+
+export function getAlertedStatus(siteId: number): CheckStatus | 'flapping' | null {
+  const row = getDb()
+    .prepare('SELECT alerted_status FROM site_alert_status WHERE site_id = ?')
+    .get(siteId) as { alerted_status: CheckStatus | 'flapping' } | undefined
+  return row?.alerted_status ?? null
+}
+
+export function setAlertedStatus(siteId: number, status: CheckStatus | 'flapping') {
+  getDb()
+    .prepare(
+      `INSERT INTO site_alert_status (site_id, alerted_status) VALUES (?, ?)
+       ON CONFLICT(site_id) DO UPDATE SET alerted_status = excluded.alerted_status, updated_at = datetime('now')`,
+    )
+    .run(siteId, status)
 }
 
 export function getNotification(id: number): NotificationRow | null {

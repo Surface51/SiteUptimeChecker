@@ -1,5 +1,6 @@
 import type { NotificationType } from '#shared/types'
-import { getDb } from './db'
+import { mergeNotificationSettings } from '../../shared/notificationSettings'
+import { getDb, getStoredNotificationSettings } from './db'
 
 /**
  * Claim-or-skip against the `alert_state` cooldown table. Returns true (recording the firing)
@@ -10,6 +11,9 @@ import { getDb } from './db'
  * `fingerprint` distinguishes instances within a type: an offending IP, an expiry tier ("30d"),
  * a response-body hash. Leave it '' for alerts that are simply per-site.
  *
+ * A cooldown set for the type on the notification settings page wins over `cooldownHours`, which
+ * is then just the producer's default.
+ *
  * Lifted out of server/utils/logs/alerts.ts, where it began life as log-only.
  */
 export function claimAlert(
@@ -19,6 +23,8 @@ export function claimAlert(
   cooldownHours = 6,
 ): boolean {
   const db = getDb()
+  const configured = mergeNotificationSettings(getStoredNotificationSettings()).types[type]?.cooldownHours
+  if (configured) cooldownHours = configured
   const existing = db
     .prepare(
       `SELECT last_fired_at FROM alert_state

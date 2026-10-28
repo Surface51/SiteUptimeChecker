@@ -1,4 +1,4 @@
-import type { SiteSummary } from '#shared/types'
+import type { NotificationOverrides, SiteSummary } from '#shared/types'
 
 /** The flat, all-strings-friendly shape the SiteSettingsForm binds to. */
 export interface SiteSettingsPayload {
@@ -25,6 +25,8 @@ export interface SiteSettingsPayload {
   contentMinBytes: string
   contentWatch: boolean
   contentWatchSensitivity: number
+  /** Empty = follow the global notification settings. */
+  notificationOverrides: NotificationOverrides
 }
 
 export function emptySiteSettings(): SiteSettingsPayload {
@@ -52,6 +54,7 @@ export function emptySiteSettings(): SiteSettingsPayload {
     contentMinBytes: '',
     contentWatch: false,
     contentWatchSensitivity: 30,
+    notificationOverrides: {},
   }
 }
 
@@ -81,6 +84,7 @@ export function siteSettingsFromSite(site: SiteSummary): SiteSettingsPayload {
     contentMinBytes: site.contentMinBytes === null ? '' : String(site.contentMinBytes),
     contentWatch: site.contentWatch,
     contentWatchSensitivity: site.contentWatchSensitivity,
+    notificationOverrides: structuredClone(site.notificationOverrides ?? {}),
   }
 }
 
@@ -107,6 +111,7 @@ export function siteSettingsToBody(p: SiteSettingsPayload, opts: { includeUrl?: 
     contentMinBytes: p.contentMinBytes.trim() === '' ? null : Number(p.contentMinBytes),
     contentWatch: p.contentWatch,
     contentWatchSensitivity: p.contentWatchSensitivity,
+    notificationOverrides: p.notificationOverrides,
   }
   if (opts.includeUrl) body.url = p.url.trim()
   // Password: only send it when the user typed one, or explicitly asked to clear it.
