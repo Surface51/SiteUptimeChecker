@@ -265,38 +265,6 @@ export interface ComparePhaseAverages {
   ttfb: number | null
 }
 
-/** One day of fleet-wide figures, aggregated across every enabled site. */
-export interface FleetTrendDay {
-  date: string
-  /** Total checks across the fleet that day. */
-  total: number
-  /** Check-weighted fleet uptime, or null when no checks ran. */
-  uptime: number | null
-  downSeconds: number
-  /** Worst per-site p95 for the day, ms. */
-  p95Ms: number | null
-  /** Incidents that started that day. */
-  incidents: number
-}
-
-export interface FleetPeriodTotals {
-  uptime: number | null
-  /** Mean of the daily fleet p95s over days that have one, ms. */
-  avgP95Ms: number | null
-  worstP95Ms: number | null
-  incidents: number
-  downSeconds: number
-  mttrSeconds: number | null
-}
-
-export interface FleetTrends {
-  days: number
-  series: FleetTrendDay[]
-  current: FleetPeriodTotals
-  /** The window of equal length immediately before `current`, for deltas. */
-  previous: FleetPeriodTotals
-}
-
 export interface CompareIncidentStats {
   count: number
   totalDownSeconds: number

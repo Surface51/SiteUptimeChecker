@@ -11,9 +11,6 @@ import type {
   CompareRow,
   DailyUptime,
   DnsRecords,
-  FleetPeriodTotals,
-  FleetTrendDay,
-  FleetTrends,
   DnsRecordSet,
   IncidentListRow,
   IncidentRow,
@@ -1083,88 +1080,6 @@ export function getIncidentSummary(
   const recoverySeconds = closedRows.reduce((sum, r) => sum + (toMsOf(r.ended_at!) - toMsOf(r.started_at)), 0) / 1000
 
   return { total: rows.length, closed: closedRows.length, recoverySeconds }
-}
-
-/**
- * Fleet-wide daily series for the trailing `days`, plus totals for that window and the equal-length
- * window before it (for period-over-period deltas). Built per site from `getDailyUptime` so the
- * rollup-plus-live merge lives in one place; uptime is check-weighted rather than a mean of means.
- */
-export function getFleetTrends(days: number): FleetTrends {
-  const sites = listSites().filter((s) => s.enabled)
-
-  // Index 0..days-1 is the previous window, days..2*days-1 the current one.
-  const agg = Array.from({ length: days * 2 }, () => ({ date: '', total: 0, up: 0, downSeconds: 0, p95Ms: null as number | null }))
-  for (const site of sites) {
-    getDailyUptime(site.id, days * 2).forEach((d, i) => {
-      const a = agg[i]!
-      a.date = d.date
-      a.total += d.total
-      a.up += d.uptime !== null ? (d.uptime * d.total) / 100 : 0
-      a.downSeconds += d.downSeconds
-      if (d.p95Ms !== null) a.p95Ms = Math.max(a.p95Ms ?? 0, d.p95Ms)
-    })
-  }
-  // With no enabled sites nothing filled the dates in; derive them the way getDailyUptime does.
-  if (!agg[0]!.date) {
-    agg.forEach((a, i) => {
-      const d = new Date()
-      d.setUTCDate(d.getUTCDate() - (days * 2 - 1 - i))
-      a.date = d.toISOString().slice(0, 10)
-    })
-  }
-
-  const startDate = agg[0]!.date
-  const incidentRows = getDb()
-    .prepare(
-      `SELECT i.started_at, i.ended_at FROM incidents i
-       JOIN sites s ON s.id = i.site_id
-       WHERE s.enabled = 1 AND date(i.started_at) >= ?`,
-    )
-    .all(startDate) as { started_at: string; ended_at: string | null }[]
-
-  const toMsOf = (s: string) => new Date(`${s.replace(' ', 'T')}Z`).getTime()
-  const incidentsByDay = new Map<string, number>()
-  const recovery = { prev: { closed: 0, seconds: 0 }, cur: { closed: 0, seconds: 0 } }
-  const curStart = agg[days]!.date
-  for (const r of incidentRows) {
-    const day = r.started_at.slice(0, 10)
-    incidentsByDay.set(day, (incidentsByDay.get(day) ?? 0) + 1)
-    if (!r.ended_at) continue
-    const bucket = day >= curStart ? recovery.cur : recovery.prev
-    bucket.closed += 1
-    bucket.seconds += (toMsOf(r.ended_at) - toMsOf(r.started_at)) / 1000
-  }
-
-  const all: FleetTrendDay[] = agg.map((a) => ({
-    date: a.date,
-    total: a.total,
-    uptime: a.total > 0 ? (100 * a.up) / a.total : null,
-    downSeconds: a.downSeconds,
-    p95Ms: a.p95Ms,
-    incidents: incidentsByDay.get(a.date) ?? 0,
-  }))
-
-  const totals = (slice: FleetTrendDay[], rec: { closed: number; seconds: number }): FleetPeriodTotals => {
-    const checks = slice.reduce((sum, d) => sum + d.total, 0)
-    const up = slice.reduce((sum, d) => sum + (d.uptime !== null ? (d.uptime * d.total) / 100 : 0), 0)
-    const p95s = slice.map((d) => d.p95Ms).filter((v): v is number => v !== null)
-    return {
-      uptime: checks > 0 ? (100 * up) / checks : null,
-      avgP95Ms: p95s.length ? p95s.reduce((a, b) => a + b, 0) / p95s.length : null,
-      worstP95Ms: p95s.length ? Math.max(...p95s) : null,
-      incidents: slice.reduce((sum, d) => sum + d.incidents, 0),
-      downSeconds: slice.reduce((sum, d) => sum + d.downSeconds, 0),
-      mttrSeconds: rec.closed > 0 ? rec.seconds / rec.closed : null,
-    }
-  }
-
-  return {
-    days,
-    series: all.slice(days),
-    current: totals(all.slice(days), recovery.cur),
-    previous: totals(all.slice(0, days), recovery.prev),
-  }
 }
 
 /**
