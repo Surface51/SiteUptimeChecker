@@ -12,7 +12,9 @@ import type {
   DailyUptime,
   DnsRecords,
   DnsRecordSet,
+  IncidentListRow,
   IncidentRow,
+  IncidentTotals,
   LighthouseFormFactor,
   LighthouseReport,
   MaintenanceWindowRow,
@@ -1255,6 +1257,76 @@ export function listIncidents(siteId: number, limit = 50): IncidentRow[] {
     .prepare('SELECT * FROM incidents WHERE site_id = ? ORDER BY started_at DESC LIMIT ?')
     .all(siteId, limit) as IncidentDbRow[]
   return rows.map(mapIncident)
+}
+
+export interface IncidentFilter {
+  siteId?: number
+  status?: 'open' | 'resolved'
+  limit: number
+  offset?: number
+}
+
+function buildIncidentWhere(filter: Omit<IncidentFilter, 'limit' | 'offset'>): {
+  clause: string
+  params: number[]
+} {
+  const conditions: string[] = []
+  const params: number[] = []
+
+  if (filter.siteId !== undefined) {
+    conditions.push('i.site_id = ?')
+    params.push(filter.siteId)
+  }
+  if (filter.status === 'open') conditions.push('i.ended_at IS NULL')
+  if (filter.status === 'resolved') conditions.push('i.ended_at IS NOT NULL')
+
+  return { clause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', params }
+}
+
+export function listAllIncidents(filter: IncidentFilter): IncidentListRow[] {
+  const { clause, params } = buildIncidentWhere(filter)
+  const rows = getDb()
+    .prepare(
+      `SELECT i.*, s.name AS site_name, s.url AS site_url, s.log_slug AS log_slug
+       FROM incidents i JOIN sites s ON s.id = i.site_id
+       ${clause}
+       ORDER BY i.started_at DESC, i.id DESC LIMIT ? OFFSET ?`,
+    )
+    .all(...params, filter.limit, filter.offset ?? 0) as (IncidentDbRow & {
+    site_name: string | null
+    site_url: string
+    log_slug: string | null
+  })[]
+  return rows.map((row) => ({
+    ...mapIncident(row),
+    siteName: row.site_name,
+    siteUrl: row.site_url,
+    logSlug: row.log_slug,
+  }))
+}
+
+export function countIncidents(filter: Omit<IncidentFilter, 'limit' | 'offset'> = {}): number {
+  const { clause, params } = buildIncidentWhere(filter)
+  const row = getDb()
+    .prepare(`SELECT COUNT(*) AS n FROM incidents i ${clause}`)
+    .get(...params) as { n: number }
+  return row.n
+}
+
+export function incidentTotals(filter: Omit<IncidentFilter, 'limit' | 'offset'> = {}): IncidentTotals {
+  const { clause, params } = buildIncidentWhere(filter)
+  const rows = getDb()
+    .prepare(`SELECT i.* FROM incidents i ${clause}`)
+    .all(...params) as IncidentDbRow[]
+  const incidents = rows.map(mapIncident)
+  const resolved = incidents.filter((i) => i.endedAt !== null)
+  const sum = (list: IncidentRow[]) => list.reduce((acc, i) => acc + (i.durationSeconds ?? 0), 0)
+  return {
+    count: incidents.length,
+    openCount: incidents.length - resolved.length,
+    mttrSeconds: resolved.length ? Math.round(sum(resolved) / resolved.length) : null,
+    totalDownSeconds: sum(incidents),
+  }
 }
 
 export function getIncidentStats(siteId: number, hours: number): CompareIncidentStats {

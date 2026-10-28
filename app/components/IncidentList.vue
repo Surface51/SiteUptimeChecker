@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import type { IncidentRow } from '#shared/types'
+import type { IncidentListRow, IncidentRow } from '#shared/types'
 
 const props = defineProps<{
-  incidents: IncidentRow[]
+  incidents: (IncidentRow | IncidentListRow)[]
   /** When the site is linked to logs, each incident can be expanded for its log context. */
   logSlug?: string | null
   siteId?: number
+  /** Fleet-wide mode: label each row with its site and use the row's own site for log context. */
+  showSite?: boolean
+  /** Overrides the "N total" count when `incidents` is only one loaded page of a larger set. */
+  total?: number
 }>()
 
 const route = useRoute()
@@ -13,9 +17,13 @@ const siteId = computed(() => props.siteId ?? Number(route.params.id))
 
 const expanded = ref<number | null>(null)
 
-function toggle(id: number) {
-  if (!props.logSlug) return
-  expanded.value = expanded.value === id ? null : id
+function rowLogSlug(incident: IncidentRow | IncidentListRow) {
+  return props.showSite && 'logSlug' in incident ? incident.logSlug : props.logSlug
+}
+
+function toggle(incident: IncidentRow | IncidentListRow) {
+  if (!rowLogSlug(incident)) return
+  expanded.value = expanded.value === incident.id ? null : incident.id
 }
 
 function formatTime(iso: string) {
@@ -42,7 +50,7 @@ const mttrSeconds = computed(() => {
       Incidents
       <template #actions>
         <span class="text-xs text-tertiary">
-          {{ incidents.length }} total · MTTR
+          {{ total ?? incidents.length }} total · MTTR
           {{ formatDuration(mttrSeconds === null ? null : Math.round(mttrSeconds)) }}
         </span>
       </template>
@@ -54,13 +62,13 @@ const mttrSeconds = computed(() => {
       <li v-for="incident in incidents" :key="incident.id" class="py-3">
         <div
           class="flex items-center justify-between gap-3"
-          :class="logSlug ? 'cursor-pointer' : ''"
-          @click="toggle(incident.id)"
+          :class="rowLogSlug(incident) ? 'cursor-pointer' : ''"
+          @click="toggle(incident)"
         >
           <div class="min-w-0">
             <div class="flex items-center gap-1.5 font-medium text-primary">
               <UiIcon
-                v-if="logSlug"
+                v-if="rowLogSlug(incident)"
                 :name="expanded === incident.id ? 'expand_more' : 'chevron_right'"
                 :size="16"
                 class="text-tertiary"
@@ -69,6 +77,14 @@ const mttrSeconds = computed(() => {
               <span class="text-tertiary">→</span>
               {{ incident.endedAt ? formatTime(incident.endedAt) : 'ongoing' }}
             </div>
+            <NuxtLink
+              v-if="showSite && 'siteUrl' in incident"
+              :to="`/sites/${incident.siteId}/incidents`"
+              class="mt-0.5 block truncate text-xs text-accent no-underline hover:underline"
+              @click.stop
+            >
+              {{ incident.siteName || incident.siteUrl }}
+            </NuxtLink>
             <div v-if="incident.cause" class="mt-0.5 truncate text-xs text-tertiary">{{ incident.cause }}</div>
           </div>
           <UiBadge :tone="incident.endedAt ? 'outline' : 'down'" class="whitespace-nowrap">
@@ -76,8 +92,8 @@ const mttrSeconds = computed(() => {
           </UiBadge>
         </div>
 
-        <div v-if="logSlug && expanded === incident.id" class="mt-3 rounded-md bg-sunken p-4">
-          <LogsIncidentContext :site-id="siteId" :incident-id="incident.id" />
+        <div v-if="rowLogSlug(incident) && expanded === incident.id" class="mt-3 rounded-md bg-sunken p-4">
+          <LogsIncidentContext :site-id="showSite ? incident.siteId : siteId" :incident-id="incident.id" />
         </div>
       </li>
     </ul>

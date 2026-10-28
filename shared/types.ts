@@ -223,6 +223,21 @@ export interface IncidentRow {
   durationSeconds: number | null
 }
 
+/** An incident joined with its site, for the fleet-wide incidents page. */
+export interface IncidentListRow extends IncidentRow {
+  siteName: string | null
+  siteUrl: string
+  logSlug: string | null
+}
+
+export interface IncidentTotals {
+  count: number
+  openCount: number
+  /** Mean duration of resolved incidents, seconds; null when none have resolved. */
+  mttrSeconds: number | null
+  totalDownSeconds: number
+}
+
 export interface MaintenanceWindowRow {
   id: number
   siteId: number

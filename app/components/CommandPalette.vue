@@ -50,6 +50,7 @@ const commands = computed<Command[]>(() => {
   const cmds: Command[] = [
     { id: 'nav:dashboard', title: 'Dashboard', icon: 'dashboard', group: 'Go to', run: () => go('/') },
     { id: 'nav:triage', title: 'Triage', icon: 'emergency_home', group: 'Go to', run: () => go('/triage') },
+    { id: 'nav:incidents', title: 'Incidents', icon: 'crisis_alert', group: 'Go to', run: () => go('/incidents') },
     { id: 'nav:compare', title: 'Compare', icon: 'compare_arrows', group: 'Go to', run: () => go('/compare') },
     { id: 'nav:logs', title: 'Logs', icon: 'receipt_long', group: 'Go to', run: () => go('/logs') },
     { id: 'nav:notifications', title: 'Notifications', icon: 'notifications', group: 'Go to', run: () => go('/notifications') },

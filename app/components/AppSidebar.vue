@@ -9,6 +9,7 @@ const { tags } = useTags()
 const navItems = [
   { to: '/', label: 'Dashboard', icon: 'dashboard', exact: true },
   { to: '/triage', label: 'Triage', icon: 'emergency_home', exact: false },
+  { to: '/incidents', label: 'Incidents', icon: 'crisis_alert', exact: false },
   { to: '/compare', label: 'Compare', icon: 'compare_arrows', exact: false },
   { to: '/logs', label: 'Logs', icon: 'receipt_long', exact: false },
   { to: '/notifications', label: 'Notifications', icon: 'notifications', exact: false },
