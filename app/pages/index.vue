@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import type { FleetTrends } from '#shared/types'
-
 const { sites, pending, error, refresh } = useSites()
 const { kiosk, setKiosk, secondsAgo } = useKioskMode(sites, refresh)
 
@@ -65,19 +63,6 @@ watch(view, (v) => {
     // Not persisted; still applies for this session.
   }
 })
-
-// Trends are secondary to the status wall, so don't hold the page up waiting on them.
-type Range = 7 | 30 | 90
-const range = ref<Range>(30)
-
-const { data: trends, refresh: refreshTrends } = useFetch<FleetTrends>('/api/fleet/trends', {
-  query: { days: range },
-  lazy: true,
-})
-
-usePoll(() => refreshTrends())
-
-const kpis = useFleetKpis(trends)
 </script>
 
 <template>
@@ -92,7 +77,7 @@ const kpis = useFleetKpis(trends)
 
     <template v-else>
       <!-- Visual order is set with `order-*`: banner, then (kiosk) the tile wall first and the
-           incidents/expiry/trends underneath, or (normal) incidents/expiry/trends above the sites. -->
+           incidents/expiry row underneath, or (normal) the incidents/expiry row above the sites. -->
       <FleetBanner
         class="order-1"
         :sites="filteredSites"
@@ -107,45 +92,7 @@ const kpis = useFleetKpis(trends)
         <ExpiryBar :sites="filteredSites" :class="incidents ? '' : 'lg:col-span-2'" />
       </div>
 
-      <section class="flex flex-col gap-4" :class="kiosk ? 'order-4' : 'order-3'">
-        <UiSectionHeading>
-          Trends
-          <template #actions>
-            <UiSegmentedControl
-              v-model="range"
-              :options="[
-                { label: '7d', value: 7 },
-                { label: '30d', value: 30 },
-                { label: '90d', value: 90 },
-              ]"
-            />
-          </template>
-        </UiSectionHeading>
-
-        <UiCard padding="px-8 py-7">
-          <div v-if="trends" class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
-            <FleetKpi v-for="k in kpis" :key="k.label" :label="k.label" :value="k.value" :delta="k.delta" />
-          </div>
-          <div v-else class="text-sm text-tertiary">Loading…</div>
-        </UiCard>
-
-        <div v-if="trends" class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <UiCard>
-            <UiSectionHeading as="h3" class="mb-3">Uptime</UiSectionHeading>
-            <FleetUptimeChart :series="trends.series" />
-          </UiCard>
-          <UiCard>
-            <UiSectionHeading as="h3" class="mb-3">Response time (worst p95)</UiSectionHeading>
-            <FleetLatencyChart :series="trends.series" />
-          </UiCard>
-          <UiCard>
-            <UiSectionHeading as="h3" class="mb-3">Incidents per day</UiSectionHeading>
-            <FleetIncidentsChart :series="trends.series" />
-          </UiCard>
-        </div>
-      </section>
-
-      <section class="flex flex-col" :class="kiosk ? 'order-2 gap-5' : 'order-4 gap-4'">
+      <section class="flex flex-col" :class="kiosk ? 'order-2 gap-5' : 'order-3 gap-4'">
         <template v-if="!kiosk">
           <UiSectionHeading>
             Sites
