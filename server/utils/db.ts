@@ -1262,6 +1262,8 @@ export function listIncidents(siteId: number, limit = 50): IncidentRow[] {
 export interface IncidentFilter {
   siteId?: number
   status?: 'open' | 'resolved'
+  /** Only incidents lasting at least this long; open incidents count their time so far. */
+  minDurationSeconds?: number
   limit: number
   offset?: number
 }
@@ -1279,6 +1281,12 @@ function buildIncidentWhere(filter: Omit<IncidentFilter, 'limit' | 'offset'>): {
   }
   if (filter.status === 'open') conditions.push('i.ended_at IS NULL')
   if (filter.status === 'resolved') conditions.push('i.ended_at IS NOT NULL')
+  if (filter.minDurationSeconds) {
+    conditions.push(
+      `(julianday(COALESCE(i.ended_at, datetime('now'))) - julianday(i.started_at)) * 86400 >= ?`,
+    )
+    params.push(filter.minDurationSeconds)
+  }
 
   return { clause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', params }
 }

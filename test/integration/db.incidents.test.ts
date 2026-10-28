@@ -103,6 +103,13 @@ describe('fleet-wide incidents', () => {
     expect(countIncidents({ status: 'resolved' })).toBe(2)
   })
 
+  it('filters by minimum duration, counting open incidents by time so far', () => {
+    setup()
+    expect(listAllIncidents({ limit: 50, minDurationSeconds: 900 }).map((r) => r.cause)).toEqual(['a2', 'b1'])
+    expect(listAllIncidents({ limit: 50, minDurationSeconds: 1500 }).map((r) => r.cause)).toEqual(['a2'])
+    expect(incidentTotals({ minDurationSeconds: 900 }).count).toBe(2)
+  })
+
   it('pages with limit and offset', () => {
     setup()
     expect(listAllIncidents({ limit: 1, offset: 1 }).map((r) => r.cause)).toEqual(['b1'])

@@ -11,19 +11,31 @@ const STATUS_OPTIONS = [
   { label: 'Resolved', value: 'resolved' as const },
 ]
 
+const DURATION_OPTIONS = [
+  { label: 'Any duration', value: 0 },
+  { label: '1 minute or longer', value: 60 },
+  { label: '5 minutes or longer', value: 300 },
+  { label: '15 minutes or longer', value: 900 },
+  { label: '1 hour or longer', value: 3600 },
+  { label: '6 hours or longer', value: 21_600 },
+  { label: '24 hours or longer', value: 86_400 },
+]
+
 const siteId = ref<number | ''>('')
+const minDuration = ref(0)
 const status = ref<'all' | 'open' | 'resolved'>('all')
 
 const LIMIT = 50
 const offset = ref(0)
 
-watch([siteId, status], () => {
+watch([siteId, status, minDuration], () => {
   offset.value = 0
 })
 
 const filterQuery = computed(() => ({
   ...(siteId.value !== '' ? { siteId: siteId.value } : {}),
   ...(status.value !== 'all' ? { status: status.value } : {}),
+  ...(minDuration.value ? { minDuration: minDuration.value } : {}),
 }))
 
 const listQuery = computed(() => ({ ...filterQuery.value, limit: LIMIT, offset: offset.value }))
@@ -94,6 +106,9 @@ function formatDuration(seconds: number | null) {
               ...sites.map((s) => ({ label: s.name || s.url, value: s.id })),
             ]"
           />
+        </div>
+        <div class="w-56">
+          <UiSelect v-model="minDuration" label="Duration" :options="DURATION_OPTIONS" />
         </div>
         <div class="flex flex-col gap-1.5">
           <span class="text-sm font-medium text-secondary">Status</span>
