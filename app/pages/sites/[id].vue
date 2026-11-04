@@ -215,6 +215,12 @@ async function removeSite() {
           <p v-if="site.latestCheck?.pageTitle" class="mt-1 truncate text-xs text-tertiary">
             {{ site.latestCheck.pageTitle }}
           </p>
+          <div v-if="site.hosting || site.platform" class="mt-3 flex flex-wrap items-center gap-2">
+            <UiBadge v-if="site.hosting" tone="neutral" class="gap-1.5"><UiIcon name="dns" :size="14" /> {{ site.hosting }}</UiBadge>
+            <UiBadge v-if="site.platform" tone="neutral" class="gap-1.5">
+              <PlatformIcon :platform="site.platform" :size="14" /> {{ site.platform }}
+            </UiBadge>
+          </div>
           <TagEditor
             class="mt-3"
             :site-id="site.id"

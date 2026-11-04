@@ -1,3 +1,5 @@
+import type { Hosting, Platform } from './taxonomy'
+
 export type CheckStatus = 'up' | 'degraded' | 'down'
 
 export interface RedirectHop {
@@ -108,6 +110,10 @@ export interface Site {
   logSlug: string | null
   /** Pinned sites float to the top of the directory dashboard. */
   pinned: boolean
+  /** Hosting provider — the dashboard groups by this. */
+  hosting: Hosting | null
+  /** Site platform — the dashboard filters by this. */
+  platform: Platform | null
 
   // --- Advanced request options (3.2) ---
   httpMethod: string

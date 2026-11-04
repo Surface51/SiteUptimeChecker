@@ -104,6 +104,13 @@ async function togglePaused() {
         <div class="flex items-center justify-between gap-2">
           <p class="truncate text-xs text-tertiary">{{ hostname }}</p>
           <span
+            v-if="site.platform"
+            class="inline-flex shrink-0 items-center gap-1 rounded-full bg-sunken px-2 py-0.5 text-[11px] font-medium text-secondary"
+          >
+            <PlatformIcon :platform="site.platform" :size="12" />
+            {{ site.platform }}
+          </span>
+          <span
             v-if="site.latestPerformance !== null"
             class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold"
             :class="performanceColor"

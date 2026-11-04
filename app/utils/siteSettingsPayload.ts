@@ -11,6 +11,8 @@ export interface SiteSettingsPayload {
   expectedStatus: string
   acceptedStatuses: string
   slaTarget: string
+  hosting: string
+  platform: string
   httpMethod: string
   requestHeaders: string
   requestBody: string
@@ -40,6 +42,8 @@ export function emptySiteSettings(): SiteSettingsPayload {
     expectedStatus: '',
     acceptedStatuses: '',
     slaTarget: '',
+    hosting: '',
+    platform: '',
     httpMethod: 'GET',
     requestHeaders: '',
     requestBody: '',
@@ -70,6 +74,8 @@ export function siteSettingsFromSite(site: SiteSummary): SiteSettingsPayload {
     expectedStatus: site.expectedStatus === null ? '' : String(site.expectedStatus),
     acceptedStatuses: site.acceptedStatuses ?? '',
     slaTarget: site.slaTarget === null ? '' : String(site.slaTarget),
+    hosting: site.hosting ?? '',
+    platform: site.platform ?? '',
     httpMethod: site.httpMethod,
     requestHeaders: site.requestHeaders ? JSON.stringify(site.requestHeaders, null, 2) : '',
     requestBody: site.requestBody ?? '',
@@ -99,6 +105,8 @@ export function siteSettingsToBody(p: SiteSettingsPayload, opts: { includeUrl?: 
     expectedStatus: p.expectedStatus.trim() === '' ? null : Number(p.expectedStatus),
     acceptedStatuses: p.acceptedStatuses.trim() || null,
     slaTarget: p.slaTarget.trim() === '' ? null : Number(p.slaTarget),
+    hosting: p.hosting || null,
+    platform: p.platform || null,
     httpMethod: p.httpMethod,
     requestHeaders: p.requestHeaders.trim() || null,
     requestBody: p.requestBody.trim() || null,

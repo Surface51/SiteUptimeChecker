@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { NOTIFICATION_TYPES, type NotificationDelivery, type NotificationOverrides, type NotificationType, type SiteSummary } from '#shared/types'
+import { HOSTINGS, PLATFORMS } from '#shared/taxonomy'
 import type { SiteSettingsPayload } from '~/utils/siteSettingsPayload'
 
 /**
@@ -28,6 +29,8 @@ const methodOptions = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS
   label: m,
   value: m,
 }))
+const hostingOptions = [{ label: '— None —', value: '' }, ...HOSTINGS.map((h) => ({ label: h, value: h }))]
+const platformOptions = [{ label: '— None —', value: '' }, ...PLATFORMS.map((p) => ({ label: p, value: p }))]
 const baselineOptions = [
   { label: 'Fixed threshold', value: 'fixed' },
   { label: 'Adaptive (7-day p95 × 2)', value: 'adaptive' },
@@ -117,6 +120,11 @@ const hasStoredPass = computed(() => props.site?.hasAuthPass ?? false)
         <div class="min-w-[220px] flex-1"><UiInput v-model="field('name').value" label="Name (optional)" placeholder="My site" /></div>
       </div>
     </template>
+
+    <div class="flex flex-wrap gap-4">
+      <div class="sm:w-56"><UiSelect v-model="field('hosting').value" label="Hosting" :options="hostingOptions" /></div>
+      <div class="sm:w-56"><UiSelect v-model="field('platform').value" label="Platform" :options="platformOptions" /></div>
+    </div>
 
     <div class="flex flex-wrap gap-4">
       <div class="sm:w-56">

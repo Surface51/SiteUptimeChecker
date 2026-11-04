@@ -3,20 +3,20 @@ import { fuzzyMatch } from '~/utils/fuzzy'
 import { statusRank } from '~/utils/fleetStats'
 
 export type DirectorySortKey = 'status' | 'name' | 'uptime24h' | 'response'
-export type DirectoryLayout = 'tag' | 'flat'
+export type DirectoryLayout = 'hosting' | 'flat'
 
 const COLLAPSED_KEY = 'siteUptime.directoryCollapsed'
-const UNTAGGED = 'Untagged'
+const UNASSIGNED = 'Unassigned'
 
 /**
- * Search, sort, tag-grouping, collapse state and pinning for the directory-style dashboards.
- * `filtered` is the tag-filtered site list (from useFleetFilter); everything else builds on it.
+ * Search, sort, hosting-grouping, collapse state and pinning for the directory-style dashboards.
+ * `filtered` is the filtered site list (from useFleetFilter); everything else builds on it.
  */
 export function useDirectory(filtered: Ref<SiteSummary[]>, refresh: () => unknown) {
   const { push: pushToast } = useToasts()
 
   const query = ref('')
-  const layout = ref<DirectoryLayout>('tag')
+  const layout = ref<DirectoryLayout>('hosting')
   const sortKey = ref<DirectorySortKey>('status')
   const sortOptions: { label: string; value: DirectorySortKey }[] = [
     { label: 'Status', value: 'status' },
@@ -51,23 +51,22 @@ export function useDirectory(filtered: Ref<SiteSummary[]>, refresh: () => unknow
   const sortedSites = computed(() => [...visibleSites.value].sort(compare))
   const pinnedSites = computed(() => sortedSites.value.filter((s) => s.pinned))
 
-  // A site with several tags appears under each of them. Groups with a down site come first.
+  // One group per hosting provider. Groups with a down site come first; Unassigned goes last.
   const groups = computed(() => {
     if (layout.value === 'flat') return [{ key: 'all', title: 'All sites', sites: sortedSites.value }]
 
-    const byTag = new Map<string, SiteSummary[]>()
+    const byHosting = new Map<string, SiteSummary[]>()
     for (const site of sortedSites.value) {
-      for (const tag of site.tags.length ? site.tags : [UNTAGGED]) {
-        byTag.set(tag, [...(byTag.get(tag) ?? []), site])
-      }
+      const name = site.hosting ?? UNASSIGNED
+      byHosting.set(name, [...(byHosting.get(name) ?? []), site])
     }
     const downIn = (list: SiteSummary[]) => list.filter((s) => s.enabled && s.latestCheck?.status === 'down').length
-    return [...byTag.entries()]
+    return [...byHosting.entries()]
       .sort(([ta, la], [tb, lb]) => {
-        if ((ta === UNTAGGED) !== (tb === UNTAGGED)) return ta === UNTAGGED ? 1 : -1
+        if ((ta === UNASSIGNED) !== (tb === UNASSIGNED)) return ta === UNASSIGNED ? 1 : -1
         return downIn(lb) - downIn(la) || ta.localeCompare(tb)
       })
-      .map(([tag, list]) => ({ key: `tag:${tag}`, title: tag, sites: list }))
+      .map(([name, list]) => ({ key: `hosting:${name}`, title: name, sites: list }))
   })
 
   // Collapse state is remembered per browser.

@@ -1,5 +1,6 @@
 import { createError } from 'h3'
 import type { BaselineMode, NotificationOverrides } from '#shared/types'
+import { HOSTINGS, PLATFORMS, matchHosting, matchPlatform, type Hosting, type Platform } from '../../shared/taxonomy'
 import { normalizeLogSlug } from './logs/slug'
 import { parseNotificationOverrides } from './notificationSettings'
 import { normalizeSiteUrl } from './url'
@@ -35,6 +36,8 @@ export interface SiteSettings {
   contentWatchSensitivity: number
   slaTarget: number | null
   notificationOverrides: NotificationOverrides | null
+  hosting: Hosting | null
+  platform: Platform | null
 }
 
 export const VALID_INTERVALS = new Set([60, 300, 900, 3600])
@@ -220,6 +223,20 @@ export function parseSiteSettings(body: Record<string, unknown>, opts: { partial
       if (!Number.isFinite(n) || n <= 0 || n > 100) bad('SLA target must be between 0 and 100')
       out.slaTarget = n
     }
+  }
+
+  // --- Taxonomies ---
+  if (want('hosting')) {
+    const s = trimOrNull(b.hosting)
+    const v = s === null ? null : matchHosting(s)
+    if (s !== null && v === null) bad(`Hosting must be one of: ${HOSTINGS.join(', ')}`)
+    out.hosting = v
+  }
+  if (want('platform')) {
+    const s = trimOrNull(b.platform)
+    const v = s === null ? null : matchPlatform(s)
+    if (s !== null && v === null) bad(`Platform must be one of: ${PLATFORMS.join(', ')}`)
+    out.platform = v
   }
 
   // --- Notification overrides ---

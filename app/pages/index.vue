@@ -4,7 +4,7 @@ const { kiosk, setKiosk, secondsAgo } = useKioskMode(sites, refresh)
 
 useHead({ title: 'Site Uptime' })
 
-const { allTags, selectedTags, toggleFilterTag, filteredSites } = useFleetFilter(sites)
+const { allTags, selectedTags, toggleFilterTag, selectedPlatforms, togglePlatform, platformOptions, filteredSites } = useFleetFilter(sites)
 const { query, layout, sortKey, sortOptions, visibleSites, pinnedSites, groups, collapsed, toggleCollapsed, togglePin } =
   useDirectory(filteredSites, refresh)
 
@@ -126,7 +126,7 @@ watch(view, (v) => {
             <UiSegmentedControl
               v-model="layout"
               :options="[
-                { label: 'By tag', value: 'tag', icon: 'folder' },
+                { label: 'By hosting', value: 'hosting', icon: 'dns' },
                 { label: 'Flat', value: 'flat', icon: 'list' },
               ]"
             />
@@ -138,6 +138,31 @@ watch(view, (v) => {
                 { label: 'List', value: 'list', icon: 'table_rows' },
               ]"
             />
+          </div>
+
+          <div v-if="platformOptions.length" class="flex flex-wrap items-center gap-2">
+            <span class="mr-1 text-xs tracking-wide text-tertiary uppercase">Platform</span>
+            <UiChip
+              v-for="opt in platformOptions"
+              :key="opt.platform"
+              size="sm"
+              :active="selectedPlatforms.includes(opt.platform)"
+              @click="togglePlatform(opt.platform)"
+            >
+              <span class="inline-flex items-center gap-1.5">
+                <PlatformIcon :platform="opt.platform" :size="14" />
+                {{ opt.platform }}
+                <span class="opacity-70">{{ opt.count }}</span>
+              </span>
+            </UiChip>
+            <button
+              v-if="selectedPlatforms.length"
+              type="button"
+              class="cursor-pointer border-none bg-transparent text-sm text-tertiary transition-colors hover:text-primary"
+              @click="selectedPlatforms = []"
+            >
+              Clear
+            </button>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">

@@ -138,7 +138,10 @@ function rowState(site: SiteSummary) {
           class="flex min-w-0 flex-1 items-center gap-4 py-3 pr-5 pl-2 no-underline transition-colors hover:bg-sunken"
         >
           <span class="min-w-0 flex-1">
-            <span class="block truncate text-sm font-medium text-primary">{{ site.name || siteHostname(site) }}</span>
+            <span class="flex items-center gap-1.5 text-sm font-medium text-primary">
+              <PlatformIcon v-if="site.platform" :platform="site.platform" :size="14" class="text-tertiary" />
+              <span class="truncate">{{ site.name || siteHostname(site) }}</span>
+            </span>
             <span class="block truncate text-xs text-tertiary">{{ siteHostname(site) }}</span>
           </span>
           <span class="hidden w-36 shrink-0 sm:block">

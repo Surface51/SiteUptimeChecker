@@ -51,8 +51,17 @@ const response = computed(() => {
       :class="[tone[state].box, large ? 'gap-3 p-4' : 'gap-2 p-3']"
     >
       <div class="flex items-start justify-between gap-2" :class="pinnable ? 'pr-6' : ''">
-        <span class="min-w-0 truncate font-medium text-primary" :class="large ? 'text-lg' : 'text-sm'">
-          {{ site.name || siteHostname(site) }}
+        <span class="flex min-w-0 items-center gap-1.5">
+          <PlatformIcon
+            v-if="site.platform"
+            :platform="site.platform"
+            :size="large ? 20 : 14"
+            class="text-tertiary"
+            :title="site.platform"
+          />
+          <span class="min-w-0 truncate font-medium text-primary" :class="large ? 'text-lg' : 'text-sm'">
+            {{ site.name || siteHostname(site) }}
+          </span>
         </span>
         <span v-if="site.openIncident" class="mt-1 h-2 w-2 shrink-0 rounded-full bg-down" title="Open incident" />
       </div>

@@ -35,6 +35,7 @@ import type {
   SubdomainSource,
   WhoisRecord,
 } from '#shared/types'
+import { matchHosting, matchPlatform } from '../../shared/taxonomy'
 import { mergeNotificationSettings, resolveSettingsForSite } from '../../shared/notificationSettings'
 
 const DATA_DIR = process.env.UPTIME_DATA_DIR ?? join(process.cwd(), '.data')
@@ -91,7 +92,9 @@ export function getDb(): Database.Database {
       body_chunks TEXT,
       body_chunks_at TEXT,
       sla_target REAL,
-      pinned INTEGER NOT NULL DEFAULT 0
+      pinned INTEGER NOT NULL DEFAULT 0,
+      hosting TEXT,
+      platform TEXT
     );
 
     CREATE TABLE IF NOT EXISTS checks (
@@ -385,12 +388,47 @@ function migrate(db: Database.Database) {
   add(siteCols, 'sites', 'sla_target', `sla_target REAL`)
   add(siteCols, 'sites', 'pinned', `pinned INTEGER NOT NULL DEFAULT 0`)
   add(siteCols, 'sites', 'notification_overrides', `notification_overrides TEXT`)
+  const needsTaxonomyBackfill = !siteCols.has('hosting')
+  add(siteCols, 'sites', 'hosting', `hosting TEXT`)
+  add(siteCols, 'sites', 'platform', `platform TEXT`)
   add(notifCols, 'notifications', 'delivery', `delivery TEXT NOT NULL DEFAULT 'toast'`)
 
   add(checkCols, 'checks', 'assertion_failed', `assertion_failed INTEGER`)
   add(checkCols, 'checks', 'assertion_detail', `assertion_detail TEXT`)
   add(checkCols, 'checks', 'body_hash', `body_hash TEXT`)
   add(checkCols, 'checks', 'degraded_threshold_ms', `degraded_threshold_ms REAL`)
+
+  // One-off: hosting/platform used to live in free-form tags.
+  if (needsTaxonomyBackfill) backfillTaxonomyFromTags(db)
+}
+
+/**
+ * Moves hosting/platform values out of the free-form tags and into the dedicated columns, then
+ * drops those tags so the tag chips don't repeat the taxonomy. Other tags are left alone.
+ */
+export function backfillTaxonomyFromTags(db: Database.Database) {
+  const rows = db
+    .prepare(
+      `SELECT st.site_id AS siteId, st.tag_id AS tagId, t.name AS name
+       FROM site_tags st JOIN tags t ON t.id = st.tag_id`,
+    )
+    .all() as { siteId: number; tagId: number; name: string }[]
+
+  const setHosting = db.prepare('UPDATE sites SET hosting = ? WHERE id = ? AND hosting IS NULL')
+  const setPlatform = db.prepare('UPDATE sites SET platform = ? WHERE id = ? AND platform IS NULL')
+  const dropLink = db.prepare('DELETE FROM site_tags WHERE site_id = ? AND tag_id = ?')
+
+  db.transaction(() => {
+    for (const r of rows) {
+      const hosting = matchHosting(r.name)
+      const platform = matchPlatform(r.name)
+      if (hosting) setHosting.run(hosting, r.siteId)
+      else if (platform) setPlatform.run(platform, r.siteId)
+      else continue
+      dropLink.run(r.siteId, r.tagId)
+    }
+    db.prepare('DELETE FROM tags WHERE NOT EXISTS (SELECT 1 FROM site_tags WHERE tag_id = tags.id)').run()
+  })()
 }
 
 export function closeDb() {
@@ -433,6 +471,8 @@ interface SiteRow {
   sla_target: number | null
   pinned: number
   notification_overrides: string | null
+  hosting: string | null
+  platform: string | null
 }
 
 function parseHeaders(raw: string | null): Record<string, string> | null {
@@ -469,6 +509,8 @@ function mapSite(row: SiteRow): Site {
     tags: getTagsForSite(row.id),
     logSlug: row.log_slug,
     pinned: !!row.pinned,
+    hosting: matchHosting(row.hosting),
+    platform: matchPlatform(row.platform),
     httpMethod: row.http_method || 'GET',
     requestHeaders: parseHeaders(row.request_headers),
     requestBody: row.request_body,
@@ -632,6 +674,8 @@ const SITE_SETTINGS_COLUMNS: Record<string, string> = {
   contentWatchSensitivity: 'content_watch_sensitivity',
   slaTarget: 'sla_target',
   notificationOverrides: 'notification_overrides',
+  hosting: 'hosting',
+  platform: 'platform',
 }
 
 function toSiteDbValue(key: string, value: unknown): unknown {

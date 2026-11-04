@@ -1,6 +1,10 @@
 import type { SiteSummary } from '#shared/types'
+import { PLATFORMS, matchPlatform, type Platform } from '#shared/taxonomy'
 
-/** Tag filtering shared by the dashboard variations: sites must carry ALL the selected tags. */
+/**
+ * Filtering shared by the dashboard variations: sites must carry ALL the selected tags and match
+ * ANY of the selected platforms (a site has only one platform).
+ */
 export function useFleetFilter(sites: Ref<SiteSummary[]>) {
   const route = useRoute()
 
@@ -16,6 +20,25 @@ export function useFleetFilter(sites: Ref<SiteSummary[]>) {
     typeof route.query.tags === 'string' ? route.query.tags.split(',').filter(Boolean) : [],
   )
 
+  const selectedPlatforms = ref<Platform[]>(
+    typeof route.query.platforms === 'string'
+      ? route.query.platforms.split(',').flatMap((p) => matchPlatform(p) ?? [])
+      : [],
+  )
+
+  function togglePlatform(p: Platform) {
+    selectedPlatforms.value = selectedPlatforms.value.includes(p)
+      ? selectedPlatforms.value.filter((x) => x !== p)
+      : [...selectedPlatforms.value, p]
+  }
+
+  /** Platforms in use, in taxonomy order, with how many sites carry each. */
+  const platformOptions = computed(() =>
+    PLATFORMS.map((platform) => ({ platform, count: sites.value.filter((s) => s.platform === platform).length })).filter(
+      (o) => o.count > 0,
+    ),
+  )
+
   function toggleFilterTag(tag: string) {
     const idx = selectedTags.value.findIndex((t) => t.toLowerCase() === tag.toLowerCase())
     if (idx === -1) {
@@ -26,13 +49,15 @@ export function useFleetFilter(sites: Ref<SiteSummary[]>) {
   }
 
   const filteredSites = computed(() => {
-    if (!selectedTags.value.length) return sites.value
+    const platforms = selectedPlatforms.value
+    const base = platforms.length ? sites.value.filter((s) => s.platform && platforms.includes(s.platform)) : sites.value
+    if (!selectedTags.value.length) return base
     const wanted = selectedTags.value.map((t) => t.toLowerCase())
-    return sites.value.filter((s) => {
+    return base.filter((s) => {
       const have = new Set(s.tags.map((t) => t.toLowerCase()))
       return wanted.every((t) => have.has(t))
     })
   })
 
-  return { allTags, selectedTags, toggleFilterTag, filteredSites }
+  return { allTags, selectedTags, toggleFilterTag, selectedPlatforms, togglePlatform, platformOptions, filteredSites }
 }
