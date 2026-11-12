@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import * as chromeLauncher from 'chrome-launcher'
 import lighthouse, { desktopConfig } from 'lighthouse'
 import { chromium } from 'playwright'
@@ -128,8 +129,12 @@ export async function runLighthouseNow(
 
   let chrome: chromeLauncher.LaunchedChrome | null = null
   try {
+    const chromePath = chromium.executablePath()
+    if (!existsSync(chromePath)) {
+      throw new Error(`Chromium not found at ${chromePath} — run \`npx playwright install chromium\``)
+    }
     chrome = await chromeLauncher.launch({
-      chromePath: chromium.executablePath(),
+      chromePath,
       chromeFlags: ['--headless', '--no-sandbox', '--disable-gpu'],
     })
 
