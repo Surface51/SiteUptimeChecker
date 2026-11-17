@@ -48,10 +48,10 @@ function rawInsertIncident(siteId: number, startedAt: string, endedAt: string) {
 describe('getResponseStats', () => {
   it('returns nulls and zero count when there are no checks with a response time', () => {
     const site = makeSite()
-    expect(getResponseStats(site.id, 24)).toEqual({ avgMs: null, p95Ms: null, count: 0 })
+    expect(getResponseStats(site.id, 24)).toEqual({ avgMs: null, p50Ms: null, p95Ms: null, count: 0 })
   })
 
-  it('computes avg and p95 over the requested window', () => {
+  it('computes avg, p50 and p95 over the requested window', () => {
     const site = makeSite()
     for (let i = 1; i <= 20; i++) {
       rawInsertCheck(site.id, `2026-01-01 00:${String(i).padStart(2, '0')}:00`, { timeTotal: i * 10 })
@@ -59,6 +59,7 @@ describe('getResponseStats', () => {
     const stats = getResponseStats(site.id, 24 * 365)
     expect(stats.count).toBe(20)
     expect(stats.avgMs).toBe(105)
+    expect(stats.p50Ms).toBe(100)
     expect(stats.p95Ms).toBe(190)
   })
 
@@ -68,7 +69,7 @@ describe('getResponseStats', () => {
     rawInsertCheck(site.id, twoDaysAgo, { timeTotal: 999 })
     rawInsertCheck(site.id, new Date().toISOString().slice(0, 19).replace('T', ' '), { timeTotal: null })
     rawInsertCheck(site.id, new Date().toISOString().slice(0, 19).replace('T', ' '), { timeTotal: 100 })
-    expect(getResponseStats(site.id, 24)).toEqual({ avgMs: 100, p95Ms: 100, count: 1 })
+    expect(getResponseStats(site.id, 24)).toEqual({ avgMs: 100, p50Ms: 100, p95Ms: 100, count: 1 })
   })
 })
 

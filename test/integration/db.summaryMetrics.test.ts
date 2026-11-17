@@ -74,6 +74,7 @@ describe('buildSiteSummary', () => {
     const site = makeSite()
     const summary = buildSiteSummary(site)
     expect(summary.avgMs24h).toBeNull()
+    expect(summary.p50Ms24h).toBeNull()
     expect(summary.p95Ms24h).toBeNull()
     expect(summary.checkCount24h).toBe(0)
     expect(summary.incidents30d).toEqual({ total: 0, closed: 0, recoverySeconds: 0 })

@@ -60,6 +60,17 @@ export function worstP95Ms(sites: SiteSummary[]): number | null {
   return Math.max(...values)
 }
 
+// Median of per-site p50s — the typical site's typical response, so one slow outlier doesn't drag it.
+export function medianP50Ms(sites: SiteSummary[]): number | null {
+  const values = sites
+    .map((s) => s.p50Ms24h)
+    .filter((v): v is number => v !== null)
+    .sort((a, b) => a - b)
+  if (!values.length) return null
+  const mid = Math.floor(values.length / 2)
+  return values.length % 2 ? values[mid]! : (values[mid - 1]! + values[mid]!) / 2
+}
+
 export const openIncidentsCount = (sites: SiteSummary[]) => sites.filter((s) => s.openIncident !== null).length
 
 // Fleet MTTR over the trailing 30 days — summed recovery time over summed closed incidents, so

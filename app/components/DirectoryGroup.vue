@@ -5,6 +5,7 @@ import {
   formatMs,
   formatPct,
   meanUptime24h,
+  medianP50Ms,
   openIncidentsCount,
   siteHostname,
   soonestExpiryDays,
@@ -29,6 +30,7 @@ defineEmits<{ toggle: []; 'toggle-pin': [site: SiteSummary]; refresh: []; 'toggl
 
 const counts = computed(() => statusCounts(props.sites))
 const uptime = computed(() => meanUptime24h(props.sites))
+const p50 = computed(() => medianP50Ms(props.sites))
 const p95 = computed(() => worstP95Ms(props.sites))
 const incidents = computed(() => openIncidentsCount(props.sites))
 const expiry = computed(() => soonestExpiryDays(props.sites))
@@ -67,6 +69,7 @@ function rowState(site: SiteSummary) {
 
       <span class="ml-auto flex items-center gap-5 text-xs text-secondary">
         <span>{{ formatPct(uptime) }} <span class="text-tertiary">uptime</span></span>
+        <span>{{ formatMs(p50) }} <span class="text-tertiary">p50</span></span>
         <span>{{ formatMs(p95) }} <span class="text-tertiary">worst p95</span></span>
         <span v-if="incidents" class="font-medium text-down">{{ incidents }} open</span>
         <span v-if="expiry !== null && expiry < EXPIRY_WARNING_DAYS" class="font-medium text-degraded">

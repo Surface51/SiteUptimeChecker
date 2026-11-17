@@ -937,6 +937,7 @@ export function getHistory(siteId: number, hours: number, limit: number) {
 
 export interface ResponseStats {
   avgMs: number | null
+  p50Ms: number | null
   p95Ms: number | null
   count: number
 }
@@ -949,12 +950,12 @@ export function getResponseStats(siteId: number, hours: number): ResponseStats {
        ORDER BY time_total ASC`,
     )
     .all(siteId, `-${hours} hours`) as { time_total: number }[]
-  if (!rows.length) return { avgMs: null, p95Ms: null, count: 0 }
+  if (!rows.length) return { avgMs: null, p50Ms: null, p95Ms: null, count: 0 }
 
   const values = rows.map((r) => r.time_total)
   const avgMs = values.reduce((a, b) => a + b, 0) / values.length
-  const idx = Math.min(values.length - 1, Math.ceil(values.length * 0.95) - 1)
-  return { avgMs, p95Ms: values[idx] ?? null, count: values.length }
+  const at = (q: number) => values[Math.min(values.length - 1, Math.ceil(values.length * q) - 1)] ?? null
+  return { avgMs, p50Ms: at(0.5), p95Ms: at(0.95), count: values.length }
 }
 
 export function getPhaseAverages(siteId: number, hours: number): ComparePhaseAverages {
@@ -1256,6 +1257,7 @@ export function buildSiteSummary(site: Site): SiteSummary {
     latestPerformance: getLatestLighthouseReport(site.id, 'mobile')?.performance ?? null,
     latestPerformanceDesktop: getLatestLighthouseReport(site.id, 'desktop')?.performance ?? null,
     avgMs24h: responseStats.avgMs,
+    p50Ms24h: responseStats.p50Ms,
     p95Ms24h: responseStats.p95Ms,
     checkCount24h: responseStats.count,
     incidents30d,
