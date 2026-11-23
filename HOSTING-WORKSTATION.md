@@ -114,6 +114,15 @@ during ingest both end up owned by group `uptime`, so neither user ever hits "pe
 denied" reading the other's output. `/srv/siteuptime/data` stays `750 uptime:uptime`
 untouched — `logs:sync` never writes there.
 
+`logs:sync` runs with `umask 002`, so the per-host folders it creates stay group-writable.
+Folders left `755` by an older sync (rsync then fails with `mkstemp … Permission denied`)
+need a one-off repair:
+
+```bash
+sudo chgrp -R uptime /srv/siteuptime/log-ingress
+sudo find /srv/siteuptime/log-ingress -type d -exec chmod 2775 {} +
+```
+
 Log out/in once after the `usermod` for the new group membership to take effect.
 
 Same reasoning applies to `.cli-output/` (the `logs:sync`/`logs:ingest` CLI bundles,

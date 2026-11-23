@@ -18,6 +18,11 @@ function fmtBytes(n: number): string {
 }
 
 async function main(): Promise<number> {
+  // log-ingress/ is shared by jack (sync timer) and uptime (app/ingest, manual runs). The
+  // setgid parent only fixes the group; with the default 022 umask each new per-host folder is
+  // 755 and the other user's next rsync fails with `mkstemp ... Permission denied`. mkdirSync
+  // and the rsync children both inherit this.
+  process.umask(0o002)
   const opts = parseArgs(process.argv.slice(2))
   if (opts.help) {
     console.log(HELP)
