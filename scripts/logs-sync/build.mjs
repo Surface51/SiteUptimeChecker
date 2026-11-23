@@ -13,6 +13,12 @@ const here = dirname(fileURLToPath(import.meta.url))
 // left whichever ran last owning files the other user's build couldn't then unlink.
 const outdir = join(here, '../../.cli-output/logs-sync')
 
+// jack (sync timer) and uptime (manual/ingest runs) both rebuild into .cli-output. The parent's
+// setgid bit only fixes the group; with the default 022 umask whoever builds first leaves a
+// 755 subdir / 644 bundle the other user can't overwrite ("permission denied"). esbuild's
+// child process inherits this umask, so set it before the first build() call.
+process.umask(0o002)
+
 await build({
   entryPoints: [join(here, 'cli.ts')],
   outdir,

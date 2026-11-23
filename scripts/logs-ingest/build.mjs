@@ -9,6 +9,8 @@ import { dirname, join } from 'node:path'
 const here = dirname(fileURLToPath(import.meta.url))
 // Deliberately outside .output — see the comment in scripts/logs-sync/build.mjs.
 const outdir = join(here, '../../.cli-output/logs-ingest')
+// Group-writable output so jack and uptime can both rebuild — see scripts/logs-sync/build.mjs.
+process.umask(0o002)
 
 await build({
   entryPoints: [join(here, 'cli.ts'), join(here, 'worker.ts')],

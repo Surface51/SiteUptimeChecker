@@ -127,6 +127,16 @@ sudo -u uptime mkdir -p /opt/siteuptime/.cli-output
 sudo chmod 2775 /opt/siteuptime/.cli-output
 ```
 
+The build scripts set `umask 002`, so the subdirectories and bundles they create stay
+group-writable. If an older build left them `755`/`644` (the sync then fails with
+`Failed to write to output file … permission denied`), repair them once:
+
+```bash
+sudo chgrp -R uptime /opt/siteuptime/.cli-output
+sudo find /opt/siteuptime/.cli-output -type d -exec chmod 2775 {} +
+sudo find /opt/siteuptime/.cli-output -type f -exec chmod 664 {} +
+```
+
 ### 3.3 Stop the machine from sleeping
 
 A workstation will suspend on idle (and Ubuntu even suspends at the GDM screen). Kill it:
