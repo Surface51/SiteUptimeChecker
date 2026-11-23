@@ -37,6 +37,15 @@ const sslCtx = computed(() => (context.value?.kind === 'ssl' ? context.value : n
 const domainCtx = computed(() => (context.value?.kind === 'domain' ? context.value : null))
 const contentCtx = computed(() => (context.value?.kind === 'content' ? context.value : null))
 const lighthouseCtx = computed(() => (context.value?.kind === 'lighthouse' ? context.value : null))
+const seoCtx = computed(() => (context.value?.kind === 'seo' ? context.value : null))
+
+const SEO_RULE_LABEL: Record<string, string> = {
+  noindex: 'Homepage turned noindex',
+  robots_blocked: 'robots.txt blocks /',
+  robots_unreachable: 'robots.txt unreachable',
+  canonical_changed: 'Canonical changed',
+  crawl_errors: 'New crawl errors',
+}
 
 // log_spike and check share the same evidence (a log-analytics join over the alert's window) —
 // one flag covers both branches for the shared chart-and-lists block below.
@@ -385,6 +394,32 @@ const securityHref = computed(() =>
           <UiStatBlock :value="lighthouseCtx.formFactor" label="Form factor" />
           <UiStatBlock :value="lighthouseCtx.previous" label="Previous score" />
           <UiStatBlock :value="lighthouseCtx.current" label="Current score" value-class="text-down" />
+        </div>
+      </UiCard>
+    </template>
+
+    <!-- seo -->
+    <template v-else-if="seoCtx">
+      <UiCard>
+        <div class="flex flex-col gap-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <UiSectionHeading as="h3">{{ SEO_RULE_LABEL[seoCtx.rule] ?? seoCtx.rule }}</UiSectionHeading>
+            <NuxtLink :to="`/sites/${n.siteId}/seo`" class="text-sm text-accent hover:underline">Open SEO tab</NuxtLink>
+          </div>
+          <dl class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-[8rem_1fr]">
+            <template v-if="seoCtx.from !== undefined">
+              <dt class="text-tertiary">Before</dt>
+              <dd class="break-all text-secondary">{{ seoCtx.from || '—' }}</dd>
+            </template>
+            <template v-if="seoCtx.to !== undefined">
+              <dt class="text-tertiary">After</dt>
+              <dd class="break-all text-primary">{{ seoCtx.to || '—' }}</dd>
+            </template>
+            <template v-if="seoCtx.codes?.length">
+              <dt class="text-tertiary">New error types</dt>
+              <dd class="text-primary">{{ seoCtx.codes.join(', ') }}</dd>
+            </template>
+          </dl>
         </div>
       </UiCard>
     </template>

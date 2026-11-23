@@ -85,6 +85,7 @@ const tabs = computed(() => [
   { label: 'Overview', to: '' },
   { label: 'Performance', to: 'performance' },
   { label: 'Domain', to: 'domain' },
+  { label: 'SEO', to: 'seo' },
   { label: 'Incidents', to: 'incidents' },
   { label: 'Activity', to: 'activity' },
   ...(site.value?.logSlug ? [{ label: 'Logs', to: 'logs' }] : []),

@@ -35,6 +35,7 @@ export interface SiteSettings {
   contentWatch: boolean
   contentWatchSensitivity: number
   slaTarget: number | null
+  seoEnabled: boolean
   notificationOverrides: NotificationOverrides | null
   hosting: Hosting | null
   platform: Platform | null
@@ -207,6 +208,8 @@ export function parseSiteSettings(body: Record<string, unknown>, opts: { partial
 
   // --- Content-change watch ---
   if (want('contentWatch')) out.contentWatch = !!b.contentWatch
+  // On by default: a create request that doesn't mention it (the API, older clients) keeps it on.
+  if (want('seoEnabled')) out.seoEnabled = b.seoEnabled === undefined ? true : !!b.seoEnabled
   if (want('contentWatchSensitivity')) {
     const n = Number(b.contentWatchSensitivity ?? 30)
     if (!Number.isInteger(n) || n < 1 || n > 100) bad('Sensitivity must be 1–100')

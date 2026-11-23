@@ -141,7 +141,7 @@ export async function buildNotificationIncident(
       return { ...base, logContext, unavailable }
     }
     default:
-      // ssl / domain / content / lighthouse — the stored context fields are the whole story;
+      // ssl / domain / content / lighthouse / seo — the stored context fields are the whole story;
       // no log query applies.
       return base
   }

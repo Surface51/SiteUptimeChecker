@@ -143,6 +143,9 @@ export interface Site {
   // --- SLA (5) — percent target, e.g. 99.9. Null hides the SLA panel. ---
   slaTarget: number | null
 
+  /** SEO guards on every check plus the weekly sitemap crawl (server/utils/seo/). */
+  seoEnabled: boolean
+
   /** Per-site deviations from the global notification settings; null = follow the global ones. */
   notificationOverrides: NotificationOverrides | null
 }
@@ -315,6 +318,8 @@ export type NotificationType =
   | 'nameservers_changed'
   | 'ssl_issuer_changed'
   | 'content_changed'
+  // SEO guards and the weekly crawl — see server/utils/seo/.
+  | 'seo_regression'
   // A site changing state too often to alert on each transition — see server/utils/statusAlerts.ts.
   | 'flapping'
   // Raised from ingested logs rather than from a check — see server/utils/logs/alerts.ts.
@@ -337,6 +342,7 @@ export const NOTIFICATION_TYPES = [
   'nameservers_changed',
   'ssl_issuer_changed',
   'content_changed',
+  'seo_regression',
   'flapping',
   'log_5xx_spike',
   'log_php_fatal',
@@ -376,6 +382,8 @@ export type NotificationContext =
   | { kind: 'content'; percent: number; bodyHash: string }
   // server/utils/lighthouse.ts — a Performance-score regression.
   | { kind: 'lighthouse'; formFactor: LighthouseFormFactor; previous: number; current: number }
+  // server/utils/seo/guards.ts and server/utils/seo/scheduler.ts — an indexability regression.
+  | { kind: 'seo'; rule: SeoAlertRule; from?: string | null; to?: string | null; crawlId?: number; codes?: string[] }
 
 export type LighthouseFormFactor = 'mobile' | 'desktop'
 
@@ -539,4 +547,110 @@ export interface TriageItem {
   since: string | null
   /** Where the row links — usually the site page, sometimes a log tab. */
   to: string
+}
+
+// ---------- SEO health monitor (server/utils/seo/) ----------
+
+/** What a `seo_regression` notification is about. */
+export type SeoAlertRule = 'noindex' | 'robots_blocked' | 'robots_unreachable' | 'canonical_changed' | 'crawl_errors'
+
+export type SeoSeverity = 'error' | 'warn' | 'info'
+
+export type SeoIssueCode =
+  | 'http_error'
+  | 'broken_link'
+  | 'redirect_chain'
+  | 'redirect_loop'
+  | 'title_missing'
+  | 'title_length'
+  | 'title_duplicate'
+  | 'description_missing'
+  | 'description_length'
+  | 'description_duplicate'
+  | 'h1_missing'
+  | 'h1_multiple'
+  | 'sitemap_non_200'
+  | 'sitemap_noindex'
+  | 'sitemap_canonicalised'
+  | 'sitemap_blocked'
+  | 'sitemap_missing'
+  | 'canonical_broken'
+  | 'canonical_offsite'
+  | 'hreflang_no_return'
+  | 'jsonld_invalid'
+  | 'mixed_content'
+  | 'noindex'
+
+/** Per-site snapshot the every-check guards compare against. */
+export interface SeoState {
+  siteId: number
+  /** HTTP status of /robots.txt at the last fetch; 0 = network error / timeout. */
+  robotsStatus: number | null
+  robotsHash: string | null
+  robotsBlocked: boolean
+  robotsCheckedAt: string | null
+  /** Effective robots directives for the homepage (meta robots + X-Robots-Tag), lowercased. */
+  homepageRobots: string | null
+  homepageCanonical: string | null
+  homepageTitle: string | null
+  updatedAt: string
+}
+
+export interface SeoCrawl {
+  id: number
+  siteId: number
+  startedAt: string
+  finishedAt: string | null
+  pagesCrawled: number
+  sitemapUrls: number
+  error: string | null
+  issueCounts: Partial<Record<SeoSeverity, number>>
+}
+
+export interface SeoIssue {
+  url: string
+  code: SeoIssueCode
+  severity: SeoSeverity
+  detail: string | null
+  sourceUrl: string | null
+}
+
+export interface SeoPage {
+  url: string
+  status: number | null
+  redirectHops: number
+  responseMs: number | null
+  title: string | null
+  description: string | null
+  canonical: string | null
+  robots: string | null
+  h1Count: number
+  inSitemap: boolean
+  depth: number
+}
+
+export interface SeoIssueGroup {
+  code: SeoIssueCode
+  severity: SeoSeverity
+  count: number
+  issues: SeoIssue[]
+}
+
+export interface SeoCrawlJob {
+  siteId: number
+  status: 'queued' | 'running' | 'done' | 'error'
+  pagesCrawled: number
+  queuedAt: string
+  startedAt: string | null
+  finishedAt: string | null
+  error: string | null
+}
+
+export interface SeoOverview {
+  enabled: boolean
+  state: SeoState | null
+  latestCrawl: SeoCrawl | null
+  groups: SeoIssueGroup[]
+  trend: { crawlId: number; startedAt: string; error: number; warn: number; info: number }[]
+  job: SeoCrawlJob | null
 }

@@ -18,6 +18,7 @@ import { determineStatus } from './status'
 import { dnsCheck } from './dnsCheck'
 import { httpCheck } from './httpCheck'
 import { evaluateSecurityHeaders } from './securityHeaders'
+import { evaluateSeoGuards } from '../seo/guards'
 import { sslCheck } from './sslCheck'
 
 // Adaptive baseline: flag once a response is this many times the trailing-median p95, but never
@@ -137,6 +138,11 @@ export async function runCheck(site: Site): Promise<CheckRow> {
     }
 
     detectAndNotify(site, previous, check)
+
+    // Fire-and-forget: the guards may fetch robots.txt, which shouldn't hold up the check loop.
+    evaluateSeoGuards(site, httpResult).catch((err) =>
+      console.error(`[seo] guard evaluation failed for site ${site.id}:`, err),
+    )
 
     if (site.contentWatch && httpResult.bodyText) {
       evaluateContentWatch(site, httpResult.bodyText, secrets.bodyChunks)

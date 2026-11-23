@@ -13,6 +13,7 @@ const TOAST_TYPE: Record<NotificationType, 'success' | 'warning' | 'error'> = {
   nameservers_changed: 'warning',
   ssl_issuer_changed: 'warning',
   content_changed: 'warning',
+  seo_regression: 'warning',
   flapping: 'warning',
   log_5xx_spike: 'error',
   log_php_fatal: 'error',

@@ -240,6 +240,19 @@ const hasStoredPass = computed(() => props.site?.hasAuthPass ?? false)
     </details>
 
     <details class="rounded-md border border-border-default px-4 py-3">
+      <summary class="cursor-pointer text-sm font-medium text-secondary">SEO monitoring</summary>
+      <div class="mt-3 flex flex-col gap-1">
+        <label class="flex items-center gap-2 text-sm text-secondary">
+          <input v-model="field('seoEnabled').value" type="checkbox" class="h-4 w-4" />
+          Watch indexability on every check and crawl the sitemap weekly
+        </label>
+        <span class="text-xs text-tertiary">
+          Alerts when the homepage turns <code>noindex</code>, robots.txt blocks crawlers, or the canonical changes.
+        </span>
+      </div>
+    </details>
+
+    <details class="rounded-md border border-border-default px-4 py-3">
       <summary class="cursor-pointer text-sm font-medium text-secondary">Notifications</summary>
       <p class="mt-2 text-xs text-tertiary">
         Overrides for this site only. Anything left on “Use global” follows the

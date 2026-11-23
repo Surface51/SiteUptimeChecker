@@ -22,6 +22,7 @@ const DEFAULT_DELIVERY: Record<NotificationType, NotificationDelivery> = {
   nameservers_changed: 'toast',
   ssl_issuer_changed: 'toast',
   content_changed: 'feed',
+  seo_regression: 'toast',
   log_5xx_spike: 'toast',
   log_php_fatal: 'toast',
   log_threat_ip: 'toast',

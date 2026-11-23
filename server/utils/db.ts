@@ -4,6 +4,12 @@ import Database from 'better-sqlite3'
 import type { SiteSettings } from './siteSettings'
 import { downSecondsForDay, downSecondsInRange } from './rollup'
 import type {
+  SeoCrawl,
+  SeoIssue,
+  SeoIssueCode,
+  SeoPage,
+  SeoSeverity,
+  SeoState,
   CheckRow,
   CheckStatus,
   CompareIncidentStats,
@@ -94,7 +100,8 @@ export function getDb(): Database.Database {
       sla_target REAL,
       pinned INTEGER NOT NULL DEFAULT 0,
       hosting TEXT,
-      platform TEXT
+      platform TEXT,
+      seo_enabled INTEGER NOT NULL DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS checks (
@@ -326,6 +333,63 @@ export function getDb(): Database.Database {
       scanned_at TEXT NOT NULL DEFAULT (datetime('now')),
       wildcard INTEGER NOT NULL DEFAULT 0
     );
+
+    -- SEO guards (server/utils/seo/guards.ts): one row per site, the last-seen indexability
+    -- signals each check compares against so only transitions alert.
+    CREATE TABLE IF NOT EXISTS seo_state (
+      site_id INTEGER PRIMARY KEY REFERENCES sites(id) ON DELETE CASCADE,
+      robots_status INTEGER,
+      robots_hash TEXT,
+      robots_blocked INTEGER NOT NULL DEFAULT 0,
+      robots_checked_at TEXT,
+      homepage_robots TEXT,
+      homepage_canonical TEXT,
+      homepage_title TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Weekly SEO crawls (server/utils/seo/crawler.ts). The last few per site are kept, with
+    -- their pages and issues cascading away when a crawl is pruned.
+    CREATE TABLE IF NOT EXISTS seo_crawls (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+      started_at TEXT NOT NULL DEFAULT (datetime('now')),
+      finished_at TEXT,
+      pages_crawled INTEGER NOT NULL DEFAULT 0,
+      sitemap_urls INTEGER NOT NULL DEFAULT 0,
+      error TEXT,
+      issue_counts TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_seo_crawls_site ON seo_crawls(site_id, id DESC);
+
+    CREATE TABLE IF NOT EXISTS seo_pages (
+      crawl_id INTEGER NOT NULL REFERENCES seo_crawls(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      status INTEGER,
+      redirect_hops INTEGER NOT NULL DEFAULT 0,
+      response_ms REAL,
+      title TEXT,
+      description TEXT,
+      canonical TEXT,
+      robots TEXT,
+      h1_count INTEGER NOT NULL DEFAULT 0,
+      in_sitemap INTEGER NOT NULL DEFAULT 0,
+      depth INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (crawl_id, url)
+    );
+
+    CREATE TABLE IF NOT EXISTS seo_issues (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      crawl_id INTEGER NOT NULL REFERENCES seo_crawls(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      code TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      detail TEXT,
+      source_url TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_seo_issues_crawl ON seo_issues(crawl_id, severity, code);
   `)
 
   migrate(db)
@@ -391,6 +455,7 @@ function migrate(db: Database.Database) {
   const needsTaxonomyBackfill = !siteCols.has('hosting')
   add(siteCols, 'sites', 'hosting', `hosting TEXT`)
   add(siteCols, 'sites', 'platform', `platform TEXT`)
+  add(siteCols, 'sites', 'seo_enabled', `seo_enabled INTEGER NOT NULL DEFAULT 1`)
   add(notifCols, 'notifications', 'delivery', `delivery TEXT NOT NULL DEFAULT 'toast'`)
 
   add(checkCols, 'checks', 'assertion_failed', `assertion_failed INTEGER`)
@@ -473,6 +538,7 @@ interface SiteRow {
   notification_overrides: string | null
   hosting: string | null
   platform: string | null
+  seo_enabled: number
 }
 
 function parseHeaders(raw: string | null): Record<string, string> | null {
@@ -527,6 +593,7 @@ function mapSite(row: SiteRow): Site {
     contentWatch: !!row.content_watch,
     contentWatchSensitivity: row.content_watch_sensitivity ?? 30,
     slaTarget: row.sla_target,
+    seoEnabled: row.seo_enabled === null || row.seo_enabled === undefined ? true : !!row.seo_enabled,
     notificationOverrides: parseJson<NotificationOverrides>(row.notification_overrides),
   }
 }
@@ -673,6 +740,7 @@ const SITE_SETTINGS_COLUMNS: Record<string, string> = {
   contentWatch: 'content_watch',
   contentWatchSensitivity: 'content_watch_sensitivity',
   slaTarget: 'sla_target',
+  seoEnabled: 'seo_enabled',
   notificationOverrides: 'notification_overrides',
   hosting: 'hosting',
   platform: 'platform',
@@ -680,7 +748,7 @@ const SITE_SETTINGS_COLUMNS: Record<string, string> = {
 
 function toSiteDbValue(key: string, value: unknown): unknown {
   if (key === 'requestHeaders' || key === 'notificationOverrides') return value == null ? null : JSON.stringify(value)
-  if (key === 'followRedirects' || key === 'contentWatch') return value ? 1 : 0
+  if (key === 'followRedirects' || key === 'contentWatch' || key === 'seoEnabled') return value ? 1 : 0
   return value as string | number | null
 }
 
@@ -1964,6 +2032,235 @@ export function markSubdomainScan(siteId: number, wildcard: boolean): void {
        ON CONFLICT(site_id) DO UPDATE SET scanned_at = excluded.scanned_at, wildcard = excluded.wildcard`,
     )
     .run(siteId, wildcard ? 1 : 0)
+}
+
+// ---------- SEO health monitor ----------
+
+interface SeoStateDbRow {
+  site_id: number
+  robots_status: number | null
+  robots_hash: string | null
+  robots_blocked: number
+  robots_checked_at: string | null
+  homepage_robots: string | null
+  homepage_canonical: string | null
+  homepage_title: string | null
+  updated_at: string
+}
+
+function mapSeoState(row: SeoStateDbRow): SeoState {
+  return {
+    siteId: row.site_id,
+    robotsStatus: row.robots_status,
+    robotsHash: row.robots_hash,
+    robotsBlocked: !!row.robots_blocked,
+    robotsCheckedAt: row.robots_checked_at,
+    homepageRobots: row.homepage_robots,
+    homepageCanonical: row.homepage_canonical,
+    homepageTitle: row.homepage_title,
+    updatedAt: row.updated_at,
+  }
+}
+
+export function getSeoState(siteId: number): SeoState | null {
+  const row = getDb().prepare(`SELECT * FROM seo_state WHERE site_id = ?`).get(siteId) as SeoStateDbRow | undefined
+  return row ? mapSeoState(row) : null
+}
+
+export type SeoStatePatch = Partial<Omit<SeoState, 'siteId' | 'updatedAt'>>
+
+const SEO_STATE_COLUMNS: Record<keyof SeoStatePatch, string> = {
+  robotsStatus: 'robots_status',
+  robotsHash: 'robots_hash',
+  robotsBlocked: 'robots_blocked',
+  robotsCheckedAt: 'robots_checked_at',
+  homepageRobots: 'homepage_robots',
+  homepageCanonical: 'homepage_canonical',
+  homepageTitle: 'homepage_title',
+}
+
+/** Insert-or-update only the fields present in `patch`; absent fields keep their stored value. */
+export function upsertSeoState(siteId: number, patch: SeoStatePatch): SeoState {
+  const db = getDb()
+  db.prepare(`INSERT OR IGNORE INTO seo_state (site_id) VALUES (?)`).run(siteId)
+  const sets: string[] = []
+  const values: (string | number | null)[] = []
+  for (const [key, col] of Object.entries(SEO_STATE_COLUMNS) as [keyof SeoStatePatch, string][]) {
+    if (!(key in patch)) continue
+    const v = patch[key]
+    sets.push(`${col} = ?`)
+    values.push(typeof v === 'boolean' ? (v ? 1 : 0) : (v ?? null))
+  }
+  sets.push(`updated_at = datetime('now')`)
+  db.prepare(`UPDATE seo_state SET ${sets.join(', ')} WHERE site_id = ?`).run(...values, siteId)
+  return getSeoState(siteId)!
+}
+
+interface SeoCrawlDbRow {
+  id: number
+  site_id: number
+  started_at: string
+  finished_at: string | null
+  pages_crawled: number
+  sitemap_urls: number
+  error: string | null
+  issue_counts: string | null
+}
+
+function mapSeoCrawl(row: SeoCrawlDbRow): SeoCrawl {
+  return {
+    id: row.id,
+    siteId: row.site_id,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+    pagesCrawled: row.pages_crawled,
+    sitemapUrls: row.sitemap_urls,
+    error: row.error,
+    issueCounts: parseJson<Partial<Record<SeoSeverity, number>>>(row.issue_counts) ?? {},
+  }
+}
+
+export function insertSeoCrawl(siteId: number): SeoCrawl {
+  const result = getDb().prepare(`INSERT INTO seo_crawls (site_id) VALUES (?)`).run(siteId)
+  return getSeoCrawl(result.lastInsertRowid as number)!
+}
+
+export function getSeoCrawl(id: number): SeoCrawl | null {
+  const row = getDb().prepare(`SELECT * FROM seo_crawls WHERE id = ?`).get(id) as SeoCrawlDbRow | undefined
+  return row ? mapSeoCrawl(row) : null
+}
+
+/**
+ * Close out a crawl: write its pages and issues in one transaction, tally issues by severity, and
+ * prune the site's older crawls down to `keep`.
+ */
+export function finishSeoCrawl(
+  crawlId: number,
+  result: { pages: SeoPage[]; issues: SeoIssue[]; sitemapUrls: number; error: string | null },
+  keep = 8,
+): SeoCrawl {
+  const db = getDb()
+  const counts: Partial<Record<SeoSeverity, number>> = {}
+  for (const i of result.issues) counts[i.severity] = (counts[i.severity] ?? 0) + 1
+
+  const insertPage = db.prepare(
+    `INSERT OR REPLACE INTO seo_pages
+       (crawl_id, url, status, redirect_hops, response_ms, title, description, canonical, robots, h1_count, in_sitemap, depth)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+  const insertIssue = db.prepare(
+    `INSERT INTO seo_issues (crawl_id, url, code, severity, detail, source_url) VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+  db.transaction(() => {
+    for (const p of result.pages) {
+      insertPage.run(
+        crawlId,
+        p.url,
+        p.status,
+        p.redirectHops,
+        p.responseMs,
+        p.title,
+        p.description,
+        p.canonical,
+        p.robots,
+        p.h1Count,
+        p.inSitemap ? 1 : 0,
+        p.depth,
+      )
+    }
+    for (const i of result.issues) insertIssue.run(crawlId, i.url, i.code, i.severity, i.detail, i.sourceUrl)
+    db.prepare(
+      `UPDATE seo_crawls SET finished_at = datetime('now'), pages_crawled = ?, sitemap_urls = ?, error = ?, issue_counts = ?
+       WHERE id = ?`,
+    ).run(result.pages.length, result.sitemapUrls, result.error, JSON.stringify(counts), crawlId)
+  })()
+
+  const crawl = getSeoCrawl(crawlId)!
+  pruneSeoCrawls(crawl.siteId, keep)
+  return crawl
+}
+
+/** Keep only the newest `keep` crawls for a site; pages and issues cascade with them. */
+export function pruneSeoCrawls(siteId: number, keep = 8) {
+  getDb()
+    .prepare(
+      `DELETE FROM seo_crawls WHERE site_id = ? AND id NOT IN (
+         SELECT id FROM seo_crawls WHERE site_id = ? ORDER BY id DESC LIMIT ?
+       )`,
+    )
+    .run(siteId, siteId, keep)
+}
+
+/** The newest crawl for a site that actually finished (an in-progress or abandoned one is skipped). */
+export function getLatestSeoCrawl(siteId: number): SeoCrawl | null {
+  const row = getDb()
+    .prepare(`SELECT * FROM seo_crawls WHERE site_id = ? AND finished_at IS NOT NULL ORDER BY id DESC LIMIT 1`)
+    .get(siteId) as SeoCrawlDbRow | undefined
+  return row ? mapSeoCrawl(row) : null
+}
+
+export function listSeoCrawls(siteId: number, limit = 8): SeoCrawl[] {
+  const rows = getDb()
+    .prepare(`SELECT * FROM seo_crawls WHERE site_id = ? AND finished_at IS NOT NULL ORDER BY id DESC LIMIT ?`)
+    .all(siteId, limit) as SeoCrawlDbRow[]
+  return rows.map(mapSeoCrawl)
+}
+
+interface SeoIssueDbRow {
+  url: string
+  code: string
+  severity: string
+  detail: string | null
+  source_url: string | null
+}
+
+export function listSeoIssues(crawlId: number): SeoIssue[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT url, code, severity, detail, source_url FROM seo_issues WHERE crawl_id = ?
+       ORDER BY CASE severity WHEN 'error' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END, code, url`,
+    )
+    .all(crawlId) as SeoIssueDbRow[]
+  return rows.map((r) => ({
+    url: r.url,
+    code: r.code as SeoIssueCode,
+    severity: r.severity as SeoSeverity,
+    detail: r.detail,
+    sourceUrl: r.source_url,
+  }))
+}
+
+interface SeoPageDbRow {
+  url: string
+  status: number | null
+  redirect_hops: number
+  response_ms: number | null
+  title: string | null
+  description: string | null
+  canonical: string | null
+  robots: string | null
+  h1_count: number
+  in_sitemap: number
+  depth: number
+}
+
+export function listSeoPages(crawlId: number): SeoPage[] {
+  const rows = getDb()
+    .prepare(`SELECT * FROM seo_pages WHERE crawl_id = ? ORDER BY depth, url`)
+    .all(crawlId) as SeoPageDbRow[]
+  return rows.map((r) => ({
+    url: r.url,
+    status: r.status,
+    redirectHops: r.redirect_hops,
+    responseMs: r.response_ms,
+    title: r.title,
+    description: r.description,
+    canonical: r.canonical,
+    robots: r.robots,
+    h1Count: r.h1_count,
+    inSitemap: !!r.in_sitemap,
+    depth: r.depth,
+  }))
 }
 
 // ---------- notifications ----------

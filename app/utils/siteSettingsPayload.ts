@@ -27,6 +27,7 @@ export interface SiteSettingsPayload {
   contentMinBytes: string
   contentWatch: boolean
   contentWatchSensitivity: number
+  seoEnabled: boolean
   /** Empty = follow the global notification settings. */
   notificationOverrides: NotificationOverrides
 }
@@ -58,6 +59,7 @@ export function emptySiteSettings(): SiteSettingsPayload {
     contentMinBytes: '',
     contentWatch: false,
     contentWatchSensitivity: 30,
+    seoEnabled: true,
     notificationOverrides: {},
   }
 }
@@ -90,6 +92,7 @@ export function siteSettingsFromSite(site: SiteSummary): SiteSettingsPayload {
     contentMinBytes: site.contentMinBytes === null ? '' : String(site.contentMinBytes),
     contentWatch: site.contentWatch,
     contentWatchSensitivity: site.contentWatchSensitivity,
+    seoEnabled: site.seoEnabled,
     notificationOverrides: structuredClone(site.notificationOverrides ?? {}),
   }
 }
@@ -119,6 +122,7 @@ export function siteSettingsToBody(p: SiteSettingsPayload, opts: { includeUrl?: 
     contentMinBytes: p.contentMinBytes.trim() === '' ? null : Number(p.contentMinBytes),
     contentWatch: p.contentWatch,
     contentWatchSensitivity: p.contentWatchSensitivity,
+    seoEnabled: p.seoEnabled,
     notificationOverrides: p.notificationOverrides,
   }
   if (opts.includeUrl) body.url = p.url.trim()

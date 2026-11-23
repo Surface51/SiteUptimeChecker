@@ -28,6 +28,7 @@
     "isbot": "^5.2.1",
     "lighthouse": "^13.4.0",
     "luxon": "^3.7.2",
+    "node-html-parser": "^9.0.7",
     "nuxt": "^4.4.8",
     "nuxt-anime": "^0.1.13",
     "playwright": "^1.61.1",

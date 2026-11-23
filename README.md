@@ -92,6 +92,39 @@ CT-only ones) and runs weekly per site on the same schedule as WHOIS/DNS, or on 
 **Rescan** on the Domain tab. A hostname can be dismissed with **Ignore** without losing its history
 of when it was first/last seen.
 
+### SEO health monitor
+
+Each site's **SEO** tab watches indexability in three layers. Turn it off per site under
+Edit → SEO monitoring.
+
+- **Guards on every check**: whenever a check returns a healthy HTML page, the homepage's
+  meta robots / `X-Robots-Tag` and `<link rel=canonical>` are read from the body the check already
+  downloaded. `robots.txt` is re-fetched at most hourly (with one retry before a failure counts).
+  A `seo_regression` notification fires only on a *transition*:
+  - the homepage gains `noindex`
+  - robots.txt starts disallowing `/` for Googlebot
+  - robots.txt goes from loading to 5xx or no response (Google pauses crawling while that lasts)
+  - the canonical changes (called out when it moves to another host)
+
+  A site that was `noindex` from the start stays quiet, and nothing is evaluated during
+  maintenance windows.
+- **Weekly crawl**: starts from robots.txt `Sitemap:` lines (or `/sitemap.xml`, following
+  indexes and `.gz`), plus a link crawl from the homepage. It visits up to `UPTIME_SEO_MAX_PAGES`
+  pages (default 500), four at a time with a short pause, skipping URLs robots.txt blocks for
+  Googlebot. Redirects are recorded hop by hop.
+  - Issues found: broken internal links, redirect chains and loops, sitemap URLs that aren't
+    200, are `noindex`, are canonicalised elsewhere or are blocked, missing or duplicate
+    titles and descriptions, `<h1>` problems, broken or off-site canonicals, hreflang without
+    a return link, invalid JSON-LD, and mixed content.
+  - A crawl that finds new *error*-level issue types compared with the previous crawl raises
+    one `seo_regression` notification.
+  - The last 8 crawls are kept. **Crawl now** runs one on demand; crawls run one at a time
+    across all sites, and `UPTIME_SEO_CRAWL=0` turns off the weekly schedule.
+- **Crawler stats** (sites linked to a log folder): Googlebot and other search-engine requests
+  over the last 30 days, the share that hit 4xx/5xx and redirects, the top errors served to
+  crawlers, and how much 2xx crawl traffic lands outside the sitemap. Engines are matched on
+  the user agent they *claim*, which isn't verified by reverse DNS.
+
 ### Triage & command palette
 
 `/triage` is a fleet-wide, severity-ranked list of everything that wants attention — open

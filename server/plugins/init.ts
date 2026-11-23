@@ -14,6 +14,7 @@ import {
 import { backfillRollups, startRollupScheduler, stopRollupScheduler } from '../utils/rollup'
 import { closeBrowser } from '../utils/screenshot'
 import { startScheduler, stopScheduler } from '../utils/scheduler'
+import { startSeoScheduler, stopSeoScheduler } from '../utils/seo/scheduler'
 
 export default defineNitroPlugin((nitroApp) => {
   getDb()
@@ -39,6 +40,7 @@ export default defineNitroPlugin((nitroApp) => {
     startLogIngestScheduler()
     startLogRetentionScheduler()
     startRollupScheduler()
+    startSeoScheduler()
     // Catch up daily rollups for history still in `checks` (one-time on upgrade; idempotent after).
     Promise.resolve().then(backfillRollups).catch((err) => console.error('[rollup] backfill failed:', err))
     // So a DB handoff knows to restart these when the CLI reattaches.
@@ -60,6 +62,7 @@ export default defineNitroPlugin((nitroApp) => {
       stopLogIngestScheduler()
       stopLogRetentionScheduler()
       stopRollupScheduler()
+      stopSeoScheduler()
 
       if (isLogWatchEnabled()) {
         const { stopLogWatcher } = await import('../utils/logs/ingest/watch')

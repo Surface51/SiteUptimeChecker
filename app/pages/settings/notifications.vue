@@ -33,7 +33,7 @@ const groups: { title: string; hint: string; types: NotificationType[] }[] = [
     hint: 'Expiry and change watches.',
     types: ['ssl_expiring', 'ssl_issuer_changed', 'domain_expiring', 'nameservers_changed'],
   },
-  { title: 'Content & performance', hint: 'Page changes and Lighthouse scores.', types: ['content_changed', 'lighthouse_regression'] },
+  { title: 'Content & performance', hint: 'Page changes, SEO regressions and Lighthouse scores.', types: ['content_changed', 'seo_regression', 'lighthouse_regression'] },
   { title: 'Logs', hint: 'Raised from ingested server logs.', types: ['log_5xx_spike', 'log_php_fatal', 'log_threat_ip'] },
 ]
 
